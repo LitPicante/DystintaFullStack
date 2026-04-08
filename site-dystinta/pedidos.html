@@ -1,0 +1,53 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dystinta | Pedidos</title><link rel="stylesheet" href="styles.css"></head><body>
+<header class="topbar home-topbar home-logo-bar"><div class="container nav"><a class="brand" href="index.html"><img src="assets/logo-dystinta.jpg" alt="logo"><div><span data-company></span><small data-slogan></small></div></a></div></header>
+<section class="home-hero"><div class="container home-nav-panel"><div class="home-action-strip home-action-strip-nav"><p>Ingresá al módulo o formulario del servicio que prefieras y enviá tu pedido.</p><nav class="nav-links home-pill-grid home-pill-grid-primary"><a class="home-service-pill" href="index.html">Inicio</a><a class="home-service-pill" href="quienes-somos.html">Asesoría</a><a class="home-service-pill" href="servicios.html">Servicios</a><a class="home-service-pill" href="pedidos.html">Pedidos</a><a class="home-service-pill" href="disenos.html">Mockup</a><a class="home-service-pill" href="calculadora.html">Calculadora DTF</a><a class="home-service-pill" href="contacto.html">Contacto</a><a class="home-service-pill" href="admin.html">Back office</a><a class="home-service-pill" href="panel.html">Panel pedidos</a></nav></div></div></section>
+<section class="section"><div class="container"><h2>Pedidos online</h2><p class="lead">Elegí el tipo de pedido en la barra de arriba. Al enviar, el pedido se guarda en el panel interno y también se abre WhatsApp con el detalle listo para mandar.</p>
+
+<div class="order-menu-bar" role="tablist" aria-label="Tipos de pedidos">
+  <button class="order-tab active" data-order-tab="dtf-textil" type="button">DTF Textil</button>
+  <button class="order-tab" data-order-tab="dtf-uv" type="button">DTF UV</button>
+  <button class="order-tab" data-order-tab="serigrafia" type="button">Serigrafía</button>
+</div>
+
+<div class="order-panels">
+  <section class="order-panel active" id="panel-dtf-textil">
+    <div class="panel-header"><span class="badge">Pedido</span><h3>DTF Textil</h3><p>Ideal para remeras, uniformes y prendas personalizadas.</p></div>
+    <form class="order-form order-layout">
+      <input type="hidden" name="service" value="DTF Textil">
+      <div class="form-row"><label>Nombre<input name="name" required></label><label>Teléfono<input name="phone" required></label></div>
+      <div class="form-row"><label>Email<input type="email" name="email"></label><label>Cantidad<input name="quantity" placeholder="Ej: 20 unidades"></label></div>
+      <div class="form-row"><label>Tamaño o medida<input name="size" placeholder="Ej: 30x20 cm"></label><label>Tipo de prenda<input name="garment" placeholder="Ej: remera algodón"></label></div>
+      <label>Detalles<textarea name="details" placeholder="Indicá colores, ubicación del estampado, fechas y cualquier referencia útil."></textarea></label>
+      <label>Adjuntar archivo<input type="file" name="file"></label>
+      <div class="order-actions"><button class="btn" type="submit">Guardar y enviar por WhatsApp</button><a class="btn soft" data-whatsapp-link href="#" target="_blank">Abrir WhatsApp</a></div>
+    </form>
+  </section>
+
+  <section class="order-panel" id="panel-dtf-uv">
+    <div class="panel-header"><span class="badge">Pedido</span><h3>DTF UV</h3><p>Para envases, objetos rígidos, etiquetas y branding de productos.</p></div>
+    <form class="order-form order-layout">
+      <input type="hidden" name="service" value="DTF UV">
+      <div class="form-row"><label>Nombre<input name="name" required></label><label>Teléfono<input name="phone" required></label></div>
+      <div class="form-row"><label>Email<input type="email" name="email"></label><label>Cantidad<input name="quantity" placeholder="Ej: 100 unidades"></label></div>
+      <div class="form-row"><label>Superficie<input name="surface" placeholder="Ej: vaso, frasco, caja"></label><label>Medida aproximada<input name="size" placeholder="Ej: 8x8 cm"></label></div>
+      <label>Detalles<textarea name="details" placeholder="Contanos sobre el producto, acabado y colores."></textarea></label>
+      <label>Adjuntar archivo<input type="file" name="file"></label>
+      <div class="order-actions"><button class="btn" type="submit">Guardar y enviar por WhatsApp</button><a class="btn soft" data-whatsapp-link href="#" target="_blank">Abrir WhatsApp</a></div>
+    </form>
+  </section>
+
+  <section class="order-panel" id="panel-serigrafia">
+    <div class="panel-header"><span class="badge">Pedido</span><h3>Serigrafía</h3><p>Recomendada para volumen, campañas, eventos y tiradas grandes.</p></div>
+    <form class="order-form order-layout">
+      <input type="hidden" name="service" value="Serigrafía">
+      <div class="form-row"><label>Nombre<input name="name" required></label><label>Teléfono<input name="phone" required></label></div>
+      <div class="form-row"><label>Email<input type="email" name="email"></label><label>Cantidad<input name="quantity" placeholder="Ej: 200 unidades"></label></div>
+      <div class="form-row"><label>Material<input name="material" placeholder="Ej: algodón, papel, bolsa"></label><label>Cantidad de colores<input name="colors" placeholder="Ej: 2 colores"></label></div>
+      <label>Detalles<textarea name="details" placeholder="Indicá técnica, colores, tamaño y fecha de entrega."></textarea></label>
+      <label>Adjuntar archivo<input type="file" name="file"></label>
+      <div class="order-actions"><button class="btn" type="submit">Guardar y enviar por WhatsApp</button><a class="btn soft" data-whatsapp-link href="#" target="_blank">Abrir WhatsApp</a></div>
+    </form>
+  </section>
+</div>
+</div></section>
+<footer class="footer"><div class="container split"><div>Recepción online para <strong data-company></strong></div><a class="btn green" data-whatsapp-link href="#">Ir a WhatsApp</a></div></footer><script src="script.js"></script></body></html>
