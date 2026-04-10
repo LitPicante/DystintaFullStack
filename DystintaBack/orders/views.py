@@ -76,6 +76,14 @@ class OrderViewSet(viewsets.ModelViewSet):
         output = OrderCreateSerializer(order, context={"request": request})
         return Response(output.data, status=status.HTTP_201_CREATED)
 
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        output = OrderDetailSerializer(instance, context={"request": request})
+        return Response(output.data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
         queryset = self.get_queryset()

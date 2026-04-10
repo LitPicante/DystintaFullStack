@@ -1,10 +1,42 @@
 import json
+from urllib.parse import quote
 
 from rest_framework import serializers
 
 from accounts.serializers import UserSerializer
 from accounts.models import User
 from .models import Order
+
+
+STATUS_MESSAGE_MAP = {
+    Order.STATUS_NUEVO: "recibido y registrado en nuestro sistema.",
+    Order.STATUS_REVISION: "en revisión por nuestro equipo.",
+    Order.STATUS_DISENO: "en diseño.",
+    Order.STATUS_APROBACION: "pendiente de aprobación del cliente.",
+    Order.STATUS_PRODUCCION: "en producción.",
+    Order.STATUS_FINALIZADO: "finalizado.",
+}
+
+
+def normalize_whatsapp_phone(value):
+    digits = "".join(char for char in str(value or "") if char.isdigit())
+    return digits
+
+
+def build_order_status_whatsapp_message(order):
+    status_text = STATUS_MESSAGE_MAP.get(order.status, f"actualizado a {order.status}.")
+    return (
+        f"Hola {order.name}, tu pedido de {order.service} "
+        f"se encuentra {status_text} "
+        "Gracias por confiar en Dystinta."
+    )
+
+
+def build_order_status_whatsapp_url(order):
+    phone = normalize_whatsapp_phone(order.phone)
+    if not phone:
+        return None
+    return f"https://wa.me/{phone}?text={quote(build_order_status_whatsapp_message(order))}"
 
 
 class FlexibleJSONField(serializers.JSONField):
@@ -21,6 +53,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     fileName = serializers.CharField(source="file_name", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
     assignedTo = serializers.PrimaryKeyRelatedField(source="assigned_to", read_only=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    quantity = serializers.CharField(required=False, allow_blank=True)
     extraData = FlexibleJSONField(source="extra_data", required=False)
 
     class Meta:
@@ -59,6 +93,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     assignedTo = UserSerializer(source="assigned_to", read_only=True)
     extraData = serializers.JSONField(source="extra_data", read_only=True)
     file = serializers.SerializerMethodField()
+    whatsappMessage = serializers.SerializerMethodField()
+    whatsappUrl = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -76,6 +112,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             "assignedTo",
             "notes",
             "extraData",
+            "whatsappMessage",
+            "whatsappUrl",
             "createdAt",
             "updatedAt",
         ]
@@ -87,6 +125,12 @@ class OrderListSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.file.url)
         return obj.file.url
+
+    def get_whatsappMessage(self, obj):
+        return build_order_status_whatsapp_message(obj)
+
+    def get_whatsappUrl(self, obj):
+        return build_order_status_whatsapp_url(obj)
 
 
 class OrderDetailSerializer(OrderListSerializer):

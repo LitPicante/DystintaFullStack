@@ -24,7 +24,7 @@ export default function Admin() {
         const { data } = await api.get("/auth/me/");
         if (!mounted) return;
 
-        if (data.role === "admin") {
+        if (data.role === "admin" || data.role === "designer") {
           navigate("/panel");
           return;
         }
@@ -59,10 +59,10 @@ export default function Admin() {
 
       const me = await api.get("/auth/me/");
 
-      if (me.data.role !== "admin") {
+      if (me.data.role !== "admin" && me.data.role !== "designer") {
         localStorage.removeItem("access");
         localStorage.removeItem("refresh");
-        setMsg("Este acceso es solo para administradores.");
+        setMsg("Este acceso es solo para usuarios internos.");
         return;
       }
 
@@ -87,7 +87,7 @@ export default function Admin() {
   return (
     <div id="loginView" className="login-box">
       <h2>Back office Dystinta</h2>
-      <p className="hint">Ingresá con usuario administrador.</p>
+      <p className="hint">Ingresá con usuario interno. Admin ve todo; designer solo pedidos.</p>
 
       <form id="loginForm" onSubmit={handleLogin}>
         <label>
@@ -95,7 +95,7 @@ export default function Admin() {
           <input
             id="loginUser"
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(event) => setUsername(event.target.value)}
             required
           />
         </label>
@@ -106,7 +106,7 @@ export default function Admin() {
             id="loginPass"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
           />
         </label>
@@ -116,7 +116,7 @@ export default function Admin() {
         </button>
       </form>
 
-      <p className="hint">Demo: admin / admin123</p>
+      <p className="hint">Demo: admin / admin123 o designer / designer123</p>
 
       <div id="loginMsg">
         {msg ? <div className="notice danger">{msg}</div> : null}
