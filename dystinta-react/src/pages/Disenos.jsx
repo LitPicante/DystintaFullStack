@@ -9,6 +9,13 @@ const FONT_SIZE_MAP = {
   Grande: "2rem",
 };
 
+const EMPTY_ORDER_FORM = {
+  name: "",
+  phone: "",
+  email: "",
+  notes: "",
+};
+
 function useDraggable(ref, canvasRef, initial = { x: 0, y: 0 }) {
   useEffect(() => {
     const element = ref.current;
@@ -87,16 +94,21 @@ function useDraggable(ref, canvasRef, initial = { x: 0, y: 0 }) {
 export default function Disenos() {
   const [site, setSite] = useState(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [sendingOrder, setSendingOrder] = useState(false);
   const [activeTool, setActiveTool] = useState("texto");
   const [designText, setDesignText] = useState("DYSTINTA");
   const [textSize, setTextSize] = useState("Mediano");
   const [selectedColor, setSelectedColor] = useState("#8b4bff");
   const [shapeType, setShapeType] = useState("circle");
+  const [uploadedImageFile, setUploadedImageFile] = useState(null);
   const [originalImageSrc, setOriginalImageSrc] = useState("");
   const [previewImageSrc, setPreviewImageSrc] = useState("");
   const [imageScale, setImageScale] = useState(1);
   const [showText, setShowText] = useState(true);
   const [showShape, setShowShape] = useState(true);
+  const [showShirt, setShowShirt] = useState(true);
+  const [orderForm, setOrderForm] = useState(EMPTY_ORDER_FORM);
 
   const canvasRef = useRef(null);
   const previewTextRef = useRef(null);
@@ -190,6 +202,7 @@ export default function Disenos() {
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result || "");
+      setUploadedImageFile(file);
       setOriginalImageSrc(result);
       setPreviewImageSrc(result);
       setImageScale(1);
@@ -219,17 +232,93 @@ export default function Disenos() {
     return className;
   }
 
+  function updateOrderForm(field, value) {
+    setOrderForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function dataUrlToFile(dataUrl, filename) {
+    const [header, base64] = dataUrl.split(",");
+    const mime = header.match(/data:(.*?);/)?.[1] || "image/png";
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new File([bytes], filename, { type: mime });
+  }
+
+  async function submitMockupOrder(event) {
+    event.preventDefault();
+    setSendingOrder(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = new FormData();
+      const details = [
+        "Pedido generado desde el mockup de diseño.",
+        `Texto: ${showText ? designText || "Sin texto" : "oculto"}.`,
+        `Tamaño de texto: ${textSize}.`,
+        `Color seleccionado: ${selectedColor}.`,
+        `Figura: ${showShape ? shapeType : "oculta"}.`,
+        `Imagen PNG: ${previewImageSrc ? "cargada" : "sin imagen"}.`,
+        `Remera de fondo: ${showShirt ? "visible" : "eliminada/oculta"}.`,
+        `Escala de imagen: ${imageScale}.`,
+        orderForm.notes ? `Notas del cliente: ${orderForm.notes}` : "",
+      ].filter(Boolean).join("\n");
+      const extraData = {
+        source: "mockup-designer",
+        text: { value: designText, size: textSize, visible: showText },
+        color: selectedColor,
+        shape: { type: shapeType, visible: showShape },
+        image: { hasImage: Boolean(previewImageSrc), scale: imageScale },
+        mockup: { shirtVisible: showShirt },
+      };
+
+      payload.append("service", "DTF Textil");
+      payload.append("name", orderForm.name);
+      payload.append("phone", orderForm.phone);
+      payload.append("email", orderForm.email);
+      payload.append("quantity", "Mockup de diseño");
+      payload.append("details", details);
+      payload.append("extraData", JSON.stringify(extraData));
+
+      if (previewImageSrc) {
+        const file = previewImageSrc.startsWith("data:")
+          ? dataUrlToFile(previewImageSrc, uploadedImageFile?.name || "mockup-diseno.png")
+          : uploadedImageFile;
+        if (file) {
+          payload.append("file", file);
+          payload.append("attachments", file);
+        }
+      }
+
+      await api.post("/orders/", payload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setSuccess("Pedido de mockup enviado correctamente.");
+      setOrderForm(EMPTY_ORDER_FORM);
+    } catch {
+      setError("No se pudo enviar el pedido de mockup.");
+    } finally {
+      setSendingOrder(false);
+    }
+  }
+
   if (error) return <div className="section"><div className="container"><div className="notice danger">{error}</div></div></div>;
   if (!site) return <div className="section"><div className="container"><div className="notice">Cargando...</div></div></div>;
 
   return (
     <>
-      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} />
+      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
 
       <section className="section">
         <div className="container">
           <h2>Área de diseño</h2>
           <p className="lead">Espacio visual para mostrar herramientas de diseño, edición de texto, colores, figuras y preparación de piezas antes de producción.</p>
+          {success ? <div className="notice">{success}</div> : null}
+          {error ? <div className="notice danger">{error}</div> : null}
 
           <div className="design-workspace">
             <aside className="tool-sidebar">
@@ -249,7 +338,7 @@ export default function Disenos() {
                     <span className="hint">Simulación visual para el cliente</span>
                   </div>
                   <div className="design-canvas" ref={canvasRef}>
-                    <div className="canvas-shirt"></div>
+                    {showShirt ? <div className="canvas-shirt"></div> : null}
                     <img
                       id="designPreviewImage"
                       ref={previewImageRef}
@@ -315,13 +404,34 @@ export default function Disenos() {
                     <h3>Capas y mockup</h3>
                     <div className="info-card"><strong>Capas recomendadas</strong><p>Fondo, figura base, texto, logo y guía de corte. Esto ayuda a ordenar los diseños antes de pasarlos a impresión.</p></div>
                     <div className="mockup-toggle-list">
+                      <label className="mockup-toggle"><input id="toggleDesignShirt" type="checkbox" checked={showShirt} onChange={(e) => setShowShirt(e.target.checked)} /> Mostrar remera de fondo</label>
                       <label className="mockup-toggle"><input id="toggleDesignText" type="checkbox" checked={showText} onChange={(e) => setShowText(e.target.checked)} /> Mostrar texto en la remera</label>
                       <label className="mockup-toggle"><input id="toggleDesignShape" type="checkbox" checked={showShape} onChange={(e) => setShowShape(e.target.checked)} /> Mostrar figura en la remera</label>
                     </div>
+                    <button className="btn soft" type="button" onClick={() => setShowShirt(false)}>Eliminar remera de fondo</button>
                     <p className="hint">La imagen cargada se coloca sobre la prenda del mockup para visualizar tamaño y contraste.</p>
                   </section>
                 </div>
               </div>
+
+              <section className="card design-order-card">
+                <div className="panel-header">
+                  <span className="badge">Pedido</span>
+                  <h3>Enviar mockup al backoffice</h3>
+                  <p>El diseño se guarda como pedido para que el equipo pueda verlo en el panel interno.</p>
+                </div>
+                <form className="order-form order-layout" onSubmit={submitMockupOrder}>
+                  <div className="form-row">
+                    <label>Nombre<input required value={orderForm.name} onChange={(event) => updateOrderForm("name", event.target.value)} /></label>
+                    <label>Teléfono<input required value={orderForm.phone} onChange={(event) => updateOrderForm("phone", event.target.value)} /></label>
+                  </div>
+                  <label>Email <span className="hint">(opcional)</span><input type="email" value={orderForm.email} onChange={(event) => updateOrderForm("email", event.target.value)} /></label>
+                  <label>Notas<textarea value={orderForm.notes} onChange={(event) => updateOrderForm("notes", event.target.value)} placeholder="Talle, color de prenda, fecha deseada o indicaciones para producción." /></label>
+                  <div className="order-actions">
+                    <button className="btn" type="submit" disabled={sendingOrder}>{sendingOrder ? "Enviando..." : "Enviar pedido"}</button>
+                  </div>
+                </form>
+              </section>
             </div>
           </div>
         </div>

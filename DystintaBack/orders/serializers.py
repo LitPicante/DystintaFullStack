@@ -5,15 +5,17 @@ from rest_framework import serializers
 
 from accounts.serializers import UserSerializer
 from accounts.models import User
-from .models import Order
+from .models import Order, OrderAttachment
 
 
 STATUS_MESSAGE_MAP = {
-    Order.STATUS_NUEVO: "recibido y registrado en nuestro sistema.",
-    Order.STATUS_REVISION: "en revisión por nuestro equipo.",
-    Order.STATUS_DISENO: "en diseño.",
-    Order.STATUS_APROBACION: "pendiente de aprobación del cliente.",
-    Order.STATUS_PRODUCCION: "en producción.",
+    Order.STATUS_ARCHIVO_RECIBIDO: "recibido y registrado en nuestro sistema.",
+    Order.STATUS_DISENO: "en preparación de diseño.",
+    Order.STATUS_EN_COLA: "en cola de producción.",
+    Order.STATUS_IMPRIMIENDO: "en impresión.",
+    Order.STATUS_LISTO_RETIRAR: "listo para retirar.",
+    Order.STATUS_ENTREGADO: "entregado.",
+    Order.STATUS_EN_PAUSA: "en pausa temporalmente.",
     Order.STATUS_FINALIZADO: "finalizado.",
 }
 
@@ -80,10 +82,27 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         uploaded_file = validated_data.get("file")
         if uploaded_file and not validated_data.get("file_name"):
             validated_data["file_name"] = uploaded_file.name
-        validated_data.setdefault("status", Order.STATUS_NUEVO)
+        validated_data.setdefault("status", Order.STATUS_ARCHIVO_RECIBIDO)
         validated_data.setdefault("notes", "")
         validated_data.setdefault("extra_data", {})
         return super().create(validated_data)
+
+
+class OrderAttachmentSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+    originalName = serializers.CharField(source="original_name", read_only=True)
+
+    class Meta:
+        model = OrderAttachment
+        fields = ["id", "file", "originalName", "created_at"]
+
+    def get_file(self, obj):
+        request = self.context.get("request")
+        if not obj.file:
+            return None
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url
 
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -95,6 +114,12 @@ class OrderListSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     whatsappMessage = serializers.SerializerMethodField()
     whatsappUrl = serializers.SerializerMethodField()
+    trackingToken = serializers.CharField(source="tracking_token", read_only=True)
+    trackingEnabled = serializers.BooleanField(source="tracking_enabled", read_only=True)
+    currentProgress = serializers.IntegerField(source="current_progress", read_only=True)
+    statusUpdatedAt = serializers.DateTimeField(source="status_updated_at", read_only=True)
+    statusMessage = serializers.SerializerMethodField()
+    attachments = OrderAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
@@ -114,6 +139,12 @@ class OrderListSerializer(serializers.ModelSerializer):
             "extraData",
             "whatsappMessage",
             "whatsappUrl",
+            "trackingToken",
+            "trackingEnabled",
+            "currentProgress",
+            "statusUpdatedAt",
+            "statusMessage",
+            "attachments",
             "createdAt",
             "updatedAt",
         ]
@@ -131,6 +162,9 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_whatsappUrl(self, obj):
         return build_order_status_whatsapp_url(obj)
+
+    def get_statusMessage(self, obj):
+        return Order.message_for_status(obj.status)
 
 
 class OrderDetailSerializer(OrderListSerializer):
@@ -161,3 +195,23 @@ class OrderStatsSerializer(serializers.Serializer):
     new = serializers.IntegerField()
     design = serializers.IntegerField()
     done = serializers.IntegerField()
+
+
+class OrderTrackingSerializer(serializers.ModelSerializer):
+    currentProgress = serializers.IntegerField(source="current_progress", read_only=True)
+    statusUpdatedAt = serializers.DateTimeField(source="status_updated_at", read_only=True)
+    statusMessage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "service",
+            "status",
+            "currentProgress",
+            "statusMessage",
+            "statusUpdatedAt",
+        ]
+
+    def get_statusMessage(self, obj):
+        return Order.message_for_status(obj.status)

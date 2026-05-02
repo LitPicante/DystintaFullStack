@@ -2,7 +2,9 @@ from rest_framework import serializers
 
 from .models import (
     AboutContent,
+    AboutContentCard,
     CalculatorContent,
+    CatalogProduct,
     ContactContent,
     DesignsContent,
     HomeContent,
@@ -15,6 +17,12 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
     companyName = serializers.CharField(source="company_name")
     whatsappRaw = serializers.CharField(source="whatsapp_raw")
     map = serializers.CharField(source="map_url")
+    themePrimary = serializers.CharField(source="theme_primary")
+    themeSecondary = serializers.CharField(source="theme_secondary")
+    themeAccent = serializers.CharField(source="theme_accent")
+    themeBackground = serializers.CharField(source="theme_background")
+    themeSurface = serializers.CharField(source="theme_surface")
+    themeText = serializers.CharField(source="theme_text")
 
     class Meta:
         model = SiteSettings
@@ -29,6 +37,12 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             "email",
             "address",
             "map",
+            "themePrimary",
+            "themeSecondary",
+            "themeAccent",
+            "themeBackground",
+            "themeSurface",
+            "themeText",
         ]
 
 
@@ -43,10 +57,28 @@ class HomeContentSerializer(serializers.ModelSerializer):
         fields = ["title", "subtitle", "heroNote", "video1", "video2", "video3"]
 
 
+class AboutContentCardSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AboutContentCard
+        fields = ["id", "title", "text", "image", "order"]
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if not obj.image:
+            return None
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
+
+
 class AboutContentSerializer(serializers.ModelSerializer):
+    cards = AboutContentCardSerializer(many=True, read_only=True)
+
     class Meta:
         model = AboutContent
-        fields = ["title", "text"]
+        fields = ["title", "text", "cards"]
 
 
 class ServicesContentSerializer(serializers.ModelSerializer):
@@ -77,6 +109,22 @@ class ContactContentSerializer(serializers.ModelSerializer):
         fields = ["title", "text"]
 
 
+class CatalogProductSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CatalogProduct
+        fields = ["id", "name", "description", "price", "image", "order", "active"]
+
+    def get_image(self, obj):
+        request = self.context.get("request")
+        if not obj.image:
+            return None
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
+
+
 class PublicSiteSerializer(serializers.Serializer):
     general = SiteSettingsSerializer()
     home = HomeContentSerializer()
@@ -85,3 +133,4 @@ class PublicSiteSerializer(serializers.Serializer):
     designs = DesignsContentSerializer()
     calc = CalculatorContentSerializer()
     contact = ContactContentSerializer()
+    catalog = CatalogProductSerializer(many=True)

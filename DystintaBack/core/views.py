@@ -88,10 +88,20 @@ def replace_users(users_payload):
 def replace_orders(orders_payload):
     Order.objects.all().delete()
     user_map = {user.username: user for user in User.objects.all()}
+    legacy_status_map = {
+        "Nuevo": Order.STATUS_ARCHIVO_RECIBIDO,
+        "En revisión": Order.STATUS_ARCHIVO_RECIBIDO,
+        "Aprobación cliente": Order.STATUS_EN_COLA,
+        "Producción": Order.STATUS_IMPRIMIENDO,
+    }
+    valid_statuses = {choice[0] for choice in Order.STATUS_CHOICES}
 
     for item in orders_payload:
         assigned_to = None
         assigned_value = item.get("assignedTo")
+        status_value = legacy_status_map.get(item.get("status"), item.get("status", Order.STATUS_ARCHIVO_RECIBIDO))
+        if status_value not in valid_statuses:
+            status_value = Order.STATUS_ARCHIVO_RECIBIDO
 
         if isinstance(assigned_value, dict):
             assigned_username = assigned_value.get("username")
@@ -109,10 +119,14 @@ def replace_orders(orders_payload):
             quantity=item.get("quantity", ""),
             details=item.get("details", ""),
             file_name=item.get("fileName", ""),
-            status=item.get("status", Order.STATUS_NUEVO),
+            status=status_value,
             assigned_to=assigned_to,
             notes=item.get("notes", ""),
             extra_data=item.get("extraData", {}) or {},
+            tracking_token=item.get("trackingToken") or None,
+            tracking_enabled=bool(item.get("trackingEnabled", False)),
+            current_progress=item.get("currentProgress") or Order.progress_for_status(status_value),
+            status_updated_at=item.get("statusUpdatedAt") or None,
         )
         if item.get("createdAt"):
             order.created_at = item["createdAt"]

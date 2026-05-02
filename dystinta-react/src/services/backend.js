@@ -16,8 +16,11 @@ export const siteService = {
   getPublic() {
     return api.get("/site/public/").then((response) => response.data);
   },
-  updateSection(section, payload) {
-    return api.patch(`/site/${section}/`, payload).then((response) => response.data);
+  updateSection(section, payload, config) {
+    return api.patch(`/site/${section}/`, payload, config).then((response) => response.data);
+  },
+  updateCatalog(payload, config) {
+    return api.patch("/site/catalog/", payload, config).then((response) => response.data);
   },
 };
 
@@ -33,6 +36,9 @@ export const orderService = {
   },
   update(id, payload) {
     return api.patch(`/orders/${id}/`, payload).then((response) => response.data);
+  },
+  getTracking(token) {
+    return api.get(`/orders/tracking/${token}/`).then((response) => response.data);
   },
 };
 

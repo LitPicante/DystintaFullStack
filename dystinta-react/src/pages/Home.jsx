@@ -54,7 +54,7 @@ export default function Home() {
 
   return (
     <div className="home-shell">
-      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} />
+      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
 
       <main>
         <section className="home-hero">

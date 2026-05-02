@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo-dystinta.jpg";
 import { adminToolsService, authService, mediaService, orderService, siteService, userService } from "../services/backend";
 
-const STATUS_OPTIONS = ["Nuevo", "En revisión", "En diseño", "Aprobación cliente", "Producción", "Finalizado"];
+const STATUS_OPTIONS = ["Archivo recibido", "En diseño", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado"];
 const SERVICE_OPTIONS = ["DTF Textil", "DTF UV", "Serigrafía"];
+const COMPLETED_STATUSES = ["Entregado", "Finalizado"];
 const EMPTY_USER_FORM = { username: "", password: "", role: "designer", name: "", is_active: true };
 const SITE_SECTIONS = [
   { key: "general", title: "General", endpoint: "general", fields: [
@@ -13,6 +14,12 @@ const SITE_SECTIONS = [
     { key: "instagram", label: "Instagram", type: "url" }, { key: "facebook", label: "Facebook", type: "url" },
     { key: "tiktok", label: "TikTok", type: "url" }, { key: "email", label: "Email", type: "email" },
     { key: "address", label: "Dirección" }, { key: "map", label: "Mapa embed", type: "url" },
+    { key: "themePrimary", label: "Color primario", type: "color" },
+    { key: "themeSecondary", label: "Color secundario", type: "color" },
+    { key: "themeAccent", label: "Color acento", type: "color" },
+    { key: "themeBackground", label: "Fondo original", type: "color" },
+    { key: "themeSurface", label: "Superficies", type: "color" },
+    { key: "themeText", label: "Texto", type: "color" },
   ]},
   { key: "home", title: "Inicio", endpoint: "home", fields: [
     { key: "title", label: "Título" }, { key: "subtitle", label: "Subtítulo", multiline: true },
@@ -33,7 +40,16 @@ const SITE_SECTIONS = [
 ];
 
 function statusClass(status) {
-  return { Nuevo: "s-nuevo", "En revisión": "s-revision", "En diseño": "s-diseno", "Aprobación cliente": "s-aprobacion", Producción: "s-produccion", Finalizado: "s-finalizado" }[status] || "s-nuevo";
+  return {
+    "Archivo recibido": "s-archivo",
+    "En diseño": "s-diseno",
+    "En cola": "s-cola",
+    Imprimiendo: "s-imprimiendo",
+    "Listo para retirar": "s-listo",
+    Entregado: "s-entregado",
+    "En pausa": "s-pausa",
+    Finalizado: "s-finalizado",
+  }[status] || "s-archivo";
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -57,21 +73,267 @@ function downloadJson(filename, data) {
   URL.revokeObjectURL(url);
 }
 
+function buildTrackingUrl(order) {
+  if (!order.trackingToken) return "";
+  return `${window.location.origin}/seguimiento/${order.trackingToken}`;
+}
+
+function startOfWeek(date) {
+  const copy = new Date(date);
+  const day = copy.getDay() || 7;
+  copy.setHours(0, 0, 0, 0);
+  copy.setDate(copy.getDate() - day + 1);
+  return copy;
+}
+
+function padNumber(value) {
+  return String(value).padStart(2, "0");
+}
+
+function formatKey(date, mode) {
+  if (mode === "month") return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}`;
+  if (mode === "week") {
+    const start = startOfWeek(date);
+    return `${start.getFullYear()}-${padNumber(start.getMonth() + 1)}-${padNumber(start.getDate())}`;
+  }
+  return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}-${padNumber(date.getDate())}`;
+}
+
+function addPeriod(date, mode, amount) {
+  const copy = new Date(date);
+  if (mode === "month") copy.setMonth(copy.getMonth() + amount);
+  else if (mode === "week") copy.setDate(copy.getDate() + amount * 7);
+  else copy.setDate(copy.getDate() + amount);
+  return copy;
+}
+
+function formatPeriodLabel(key, mode) {
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(year, month - 1, day || 1);
+  if (mode === "month") {
+    return date.toLocaleDateString("es-PY", { month: "short", year: "2-digit" });
+  }
+  if (mode === "week") {
+    const end = addPeriod(date, "day", 6);
+    return `${date.toLocaleDateString("es-PY", { day: "2-digit", month: "short" })} - ${end.toLocaleDateString("es-PY", { day: "2-digit", month: "short" })}`;
+  }
+  return date.toLocaleDateString("es-PY", { day: "2-digit", month: "short" });
+}
+
+function getCompletionDate(order) {
+  const value = order.statusUpdatedAt || order.updatedAt || order.createdAt;
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function buildCompletionSeries(orders, mode) {
+  const buckets = new Map();
+  const count = mode === "month" ? 6 : mode === "week" ? 8 : 14;
+  const now = new Date();
+  const anchor = mode === "week" ? startOfWeek(now) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (mode === "month") anchor.setDate(1);
+
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const date = addPeriod(anchor, mode, -index);
+    buckets.set(formatKey(date, mode), 0);
+  }
+
+  orders.forEach((order) => {
+    if (!COMPLETED_STATUSES.includes(order.status)) return;
+    const completedAt = getCompletionDate(order);
+    if (!completedAt) return;
+    const key = formatKey(completedAt, mode);
+    if (buckets.has(key)) buckets.set(key, buckets.get(key) + 1);
+  });
+
+  return Array.from(buckets.entries()).map(([key, value]) => ({
+    key,
+    label: formatPeriodLabel(key, mode),
+    value,
+  }));
+}
+
+function buildServiceTotals(orders) {
+  return SERVICE_OPTIONS.map((service) => ({
+    service,
+    value: orders.filter((order) => COMPLETED_STATUSES.includes(order.status) && order.service === service).length,
+  }));
+}
+
+function DashboardBars({ title, subtitle, data, variant }) {
+  const max = Math.max(...data.map((item) => item.value), 1);
+  return (
+    <section className={`dashboard-chart chart-${variant}`}>
+      <div className="dashboard-chart-head">
+        <div>
+          <span className="badge">{subtitle}</span>
+          <h3>{title}</h3>
+        </div>
+        <strong>{data.reduce((total, item) => total + item.value, 0)}</strong>
+      </div>
+      <div className="dashboard-bars">
+        {data.map((item) => (
+          <div className="dashboard-bar-item" key={item.key}>
+            <span className="dashboard-bar-value">{item.value}</span>
+            <div className="dashboard-bar-track">
+              <span style={{ height: `${Math.max((item.value / max) * 100, item.value ? 12 : 2)}%` }} />
+            </div>
+            <small>{item.label}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DashboardLine({ data }) {
+  const max = Math.max(...data.map((item) => item.value), 1);
+  const width = 640;
+  const height = 180;
+  const points = data.map((item, index) => {
+    const x = data.length === 1 ? width / 2 : (index / (data.length - 1)) * width;
+    const y = height - (item.value / max) * (height - 22) - 10;
+    return { ...item, x, y };
+  });
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+
+  return (
+    <section className="dashboard-chart dashboard-line-card">
+      <div className="dashboard-chart-head">
+        <div>
+          <span className="badge">Tendencia</span>
+          <h3>Ritmo diario</h3>
+        </div>
+        <strong>{max}</strong>
+      </div>
+      <svg className="dashboard-line" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Tendencia diaria de pedidos finalizados">
+        <path className="dashboard-line-area" d={`${path} L ${width} ${height} L 0 ${height} Z`} />
+        <path className="dashboard-line-path" d={path} />
+        {points.map((point) => (
+          <g key={point.key}>
+            <circle cx={point.x} cy={point.y} r="5" />
+            <text x={point.x} y={Math.max(point.y - 10, 14)} textAnchor="middle">{point.value}</text>
+          </g>
+        ))}
+      </svg>
+    </section>
+  );
+}
+
+function BackofficeDashboard({ orders, loading }) {
+  const completedOrders = useMemo(
+    () => orders.filter((order) => COMPLETED_STATUSES.includes(order.status)),
+    [orders]
+  );
+  const daySeries = useMemo(() => buildCompletionSeries(orders, "day"), [orders]);
+  const weekSeries = useMemo(() => buildCompletionSeries(orders, "week"), [orders]);
+  const monthSeries = useMemo(() => buildCompletionSeries(orders, "month"), [orders]);
+  const serviceTotals = useMemo(() => buildServiceTotals(orders), [orders]);
+  const todayKey = formatKey(new Date(), "day");
+  const thisWeekKey = formatKey(new Date(), "week");
+  const thisMonthKey = formatKey(new Date(), "month");
+  const todayDone = daySeries.find((item) => item.key === todayKey)?.value || 0;
+  const weekDone = weekSeries.find((item) => item.key === thisWeekKey)?.value || 0;
+  const monthDone = monthSeries.find((item) => item.key === thisMonthKey)?.value || 0;
+  const peakDay = daySeries.reduce((best, item) => (item.value > best.value ? item : best), daySeries[0] || { label: "-", value: 0 });
+  const latestCompleted = completedOrders
+    .slice()
+    .sort((a, b) => (getCompletionDate(b)?.getTime() || 0) - (getCompletionDate(a)?.getTime() || 0))
+    .slice(0, 5);
+
+  return (
+    <div className="dashboard-shell">
+      <section className="dashboard-hero">
+        <div>
+          <span className="badge">Back office</span>
+          <h2>Dashboard de pedidos finalizados</h2>
+          <p className="lead">Vista operativa de cierres por día, semana y mes usando los pedidos actuales del backend.</p>
+        </div>
+        <div className="dashboard-orbit">
+          <strong>{completedOrders.length}</strong>
+          <span>finalizados</span>
+        </div>
+      </section>
+
+      {loading ? <div className="notice">Actualizando métricas...</div> : null}
+
+      <div className="dashboard-kpis">
+        <article><span>Hoy</span><strong>{todayDone}</strong><small>pedidos cerrados</small></article>
+        <article><span>Esta semana</span><strong>{weekDone}</strong><small>desde el lunes</small></article>
+        <article><span>Este mes</span><strong>{monthDone}</strong><small>acumulado mensual</small></article>
+        <article><span>Mejor día</span><strong>{peakDay.value}</strong><small>{peakDay.label}</small></article>
+      </div>
+
+      <div className="dashboard-grid-main">
+        <DashboardBars title="Finalizados por día" subtitle="Últimos 14 días" data={daySeries} variant="day" />
+        <DashboardLine data={daySeries} />
+      </div>
+
+      <div className="dashboard-grid-secondary">
+        <DashboardBars title="Finalizados por semana" subtitle="Últimas 8 semanas" data={weekSeries} variant="week" />
+        <DashboardBars title="Finalizados por mes" subtitle="Últimos 6 meses" data={monthSeries} variant="month" />
+      </div>
+
+      <div className="dashboard-bottom-grid">
+        <section className="dashboard-chart">
+          <div className="dashboard-chart-head">
+            <div>
+              <span className="badge">Servicios</span>
+              <h3>Cierres por servicio</h3>
+            </div>
+          </div>
+          <div className="service-meter-list">
+            {serviceTotals.map((item) => {
+              const max = Math.max(...serviceTotals.map((service) => service.value), 1);
+              return (
+                <div className="service-meter" key={item.service}>
+                  <div><strong>{item.service}</strong><span>{item.value}</span></div>
+                  <div className="service-meter-track"><span style={{ width: `${(item.value / max) * 100}%` }} /></div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="dashboard-chart">
+          <div className="dashboard-chart-head">
+            <div>
+              <span className="badge">Actividad</span>
+              <h3>Últimos finalizados</h3>
+            </div>
+          </div>
+          <div className="dashboard-latest">
+            {latestCompleted.length ? latestCompleted.map((order) => (
+              <article key={order.id}>
+                <div><strong>{order.name}</strong><span>{order.service}</span></div>
+                <time>{getCompletionDate(order)?.toLocaleString("es-PY")}</time>
+              </article>
+            )) : <div className="notice">Todavía no hay pedidos finalizados.</div>}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export default function Panel() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("orders");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [me, setMe] = useState(null);
   const [siteData, setSiteData] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [dashboardOrders, setDashboardOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [designers, setDesigners] = useState([]);
   const [mediaItems, setMediaItems] = useState([]);
+  const [catalogProducts, setCatalogProducts] = useState([]);
   const [stats, setStats] = useState({ total: 0, new: 0, design: 0, done: 0 });
   const [filters, setFilters] = useState({ status: "", service: "", search: "" });
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [adminPassword, setAdminPassword] = useState("");
   const [importFile, setImportFile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [savingOrderId, setSavingOrderId] = useState(null);
@@ -106,6 +368,19 @@ export default function Panel() {
     }
   }, [queryParams]);
 
+  const loadDashboardOrders = useCallback(async () => {
+    setDashboardLoading(true);
+    try {
+      const params = me?.role === "designer" ? { mine: "true" } : {};
+      const ordersData = await orderService.list(params);
+      setDashboardOrders(Array.isArray(ordersData) ? ordersData : []);
+    } catch {
+      setError("No se pudieron cargar las métricas del dashboard.");
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [me]);
+
   const refreshAdminData = useCallback(async () => {
     if (!isAdmin) return;
     try {
@@ -133,6 +408,7 @@ export default function Panel() {
           setDesigners(Array.isArray(designersData) ? designersData : []);
           setMediaItems(Array.isArray(mediaData) ? mediaData : []);
         }
+        setCatalogProducts(Array.isArray(site.catalog) ? site.catalog : []);
       } catch {
         localStorage.removeItem("access");
         localStorage.removeItem("refresh");
@@ -144,6 +420,7 @@ export default function Panel() {
   }, [navigate]);
 
   useEffect(() => { if (me) loadOrders(); }, [me, loadOrders]);
+  useEffect(() => { if (me) loadDashboardOrders(); }, [me, loadDashboardOrders]);
 
   function handleLogout() {
     const refresh = localStorage.getItem("refresh");
@@ -163,6 +440,36 @@ export default function Panel() {
     window.open(order.whatsappUrl, "_blank");
   }
 
+  async function handleCopyTrackingLink(order) {
+    const url = buildTrackingUrl(order);
+    if (!url) {
+      setError("El link se genera cuando se cambia el estado del pedido por primera vez.");
+      setSuccess("");
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = url;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setSuccess("Link de seguimiento copiado.");
+      setError("");
+    } catch {
+      setError("No se pudo copiar el link de seguimiento.");
+      setSuccess("");
+    }
+  }
+
   function handleOrderFieldChange(orderId, field, value) {
     setOrders((current) =>
       current.map((item) => (item.id === orderId ? { ...item, [field]: value } : item))
@@ -173,12 +480,119 @@ export default function Panel() {
     setSiteData((current) => ({ ...current, [sectionKey]: { ...current?.[sectionKey], [fieldKey]: value } }));
   }
 
+  function addAboutCard() {
+    setSiteData((current) => ({
+      ...current,
+      about: {
+        ...current.about,
+        cards: [
+          ...(current.about?.cards || []),
+          { title: "Nuevo cuadro", text: "", image: null, imageFile: null, previewUrl: "" },
+        ],
+      },
+    }));
+  }
+
+  function updateAboutCard(index, field, value) {
+    setSiteData((current) => ({
+      ...current,
+      about: {
+        ...current.about,
+        cards: (current.about?.cards || []).map((card, cardIndex) => {
+          if (cardIndex !== index) return card;
+          if (field === "imageFile") {
+            if (card.previewUrl) URL.revokeObjectURL(card.previewUrl);
+            return {
+              ...card,
+              imageFile: value,
+              previewUrl: value ? URL.createObjectURL(value) : "",
+            };
+          }
+          return { ...card, [field]: value };
+        }),
+      },
+    }));
+  }
+
+  function removeAboutCard(index) {
+    setSiteData((current) => {
+      const removed = current.about?.cards?.[index];
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return {
+        ...current,
+        about: {
+          ...current.about,
+          cards: (current.about?.cards || []).filter((_, cardIndex) => cardIndex !== index),
+        },
+      };
+    });
+  }
+
+  function addCatalogProduct() {
+    setCatalogProducts((current) => [
+      ...current,
+      { name: "Nuevo producto", description: "", price: "0", image: null, imageFile: null, previewUrl: "", active: true },
+    ]);
+  }
+
+  function updateCatalogProduct(index, field, value) {
+    setCatalogProducts((current) =>
+      current.map((product, productIndex) => {
+        if (productIndex !== index) return product;
+        if (field === "imageFile") {
+          if (product.previewUrl) URL.revokeObjectURL(product.previewUrl);
+          return { ...product, imageFile: value, previewUrl: value ? URL.createObjectURL(value) : "" };
+        }
+        return { ...product, [field]: value };
+      })
+    );
+  }
+
+  function removeCatalogProduct(index) {
+    setCatalogProducts((current) => {
+      const removed = current[index];
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((_, productIndex) => productIndex !== index);
+    });
+  }
+
+  async function saveCatalogProducts() {
+    setSavingSection("catalog");
+    try {
+      const payload = new FormData();
+      const products = catalogProducts.map((product, index) => {
+        if (product.imageFile) payload.append(`image_${index}`, product.imageFile);
+        return {
+          id: product.id,
+          name: product.name || "",
+          description: product.description || "",
+          price: product.price || 0,
+          active: product.active !== false,
+        };
+      });
+      payload.append("products", JSON.stringify(products));
+      const updated = await siteService.updateCatalog(payload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setCatalogProducts(Array.isArray(updated) ? updated : []);
+      setSiteData((current) => ({ ...current, catalog: Array.isArray(updated) ? updated : [] }));
+      setSuccess("Catálogo guardado.");
+      setError("");
+    } catch {
+      setError("No se pudo guardar el catálogo.");
+      setSuccess("");
+    } finally {
+      setSavingSection("");
+    }
+  }
+
   async function updateOrder(id, payload) {
     setSavingOrderId(id);
     setError("");
     try {
       await orderService.update(id, payload);
       await loadOrders();
+      await loadDashboardOrders();
       setSuccess("Pedido actualizado.");
     } catch {
       setError("No se pudo actualizar el pedido.");
@@ -190,7 +604,27 @@ export default function Panel() {
   async function saveSiteSection(section) {
     setSavingSection(section.key);
     try {
-      const updated = await siteService.updateSection(section.endpoint, siteData[section.key]);
+      let updated;
+      if (section.key === "about") {
+        const payload = new FormData();
+        const aboutData = siteData.about || {};
+        const cards = (aboutData.cards || []).map((card, index) => {
+          if (card.imageFile) payload.append(`image_${index}`, card.imageFile);
+          return {
+            id: card.id,
+            title: card.title || "",
+            text: card.text || "",
+          };
+        });
+        payload.append("title", aboutData.title || "");
+        payload.append("text", aboutData.text || "");
+        payload.append("cards", JSON.stringify(cards));
+        updated = await siteService.updateSection(section.endpoint, payload, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        updated = await siteService.updateSection(section.endpoint, siteData[section.key]);
+      }
       setSiteData((current) => ({ ...current, [section.key]: updated }));
       setSuccess(`Sección ${section.title} guardada.`);
       setError("");
@@ -301,6 +735,8 @@ export default function Panel() {
       setSiteData(data.site);
       setUsers(Array.isArray(data.users) ? data.users : []);
       setOrders(Array.isArray(data.orders) ? data.orders : []);
+      setCatalogProducts(Array.isArray(data.site?.catalog) ? data.site.catalog : []);
+      setDashboardOrders(Array.isArray(data.orders) ? data.orders : []);
       setStats({ total: 0, new: 0, design: 0, done: 0 });
       await refreshAdminData();
       setSuccess("Sistema restablecido.");
@@ -325,9 +761,11 @@ export default function Panel() {
       setSiteData(data.site);
       setUsers(Array.isArray(data.users) ? data.users : []);
       setOrders(Array.isArray(data.orders) ? data.orders : []);
+      setCatalogProducts(Array.isArray(data.site?.catalog) ? data.site.catalog : []);
       setImportFile(null);
       await refreshAdminData();
       await loadOrders();
+      await loadDashboardOrders();
       setSuccess("Respaldo importado.");
       setError("");
     } catch {
@@ -409,17 +847,21 @@ export default function Panel() {
           {error ? <div className="notice danger">{error}</div> : null}
 
           <div className="tabs">
+            <button className={`tab-btn${activeTab === "dashboard" ? " active" : ""}`} type="button" onClick={() => setActiveTab("dashboard")}>Dashboard</button>
             <button className={`tab-btn${activeTab === "orders" ? " active" : ""}`} type="button" onClick={() => setActiveTab("orders")}>Pedidos</button>
             {isAdmin ? <button className={`tab-btn${activeTab === "content" ? " active" : ""}`} type="button" onClick={() => setActiveTab("content")}>Contenido</button> : null}
+            {isAdmin ? <button className={`tab-btn${activeTab === "catalog" ? " active" : ""}`} type="button" onClick={() => setActiveTab("catalog")}>Catálogo</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "users" ? " active" : ""}`} type="button" onClick={() => setActiveTab("users")}>Usuarios</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "backup" ? " active" : ""}`} type="button" onClick={() => setActiveTab("backup")}>Respaldo</button> : null}
           </div>
+
+          {activeTab === "dashboard" ? <BackofficeDashboard orders={dashboardOrders} loading={dashboardLoading} /> : null}
 
           {activeTab === "orders" ? (
             <>
               <div className="kpis">
                 <div className="kpi"><span>Total pedidos</span><strong id="kpiTotal">{stats.total}</strong></div>
-                <div className="kpi"><span>Nuevos</span><strong id="kpiNew">{stats.new}</strong></div>
+                <div className="kpi"><span>Recibidos</span><strong id="kpiNew">{stats.new}</strong></div>
                 <div className="kpi"><span>En diseño</span><strong id="kpiDesign">{stats.design}</strong></div>
                 <div className="kpi"><span>Finalizados</span><strong id="kpiDone">{stats.done}</strong></div>
               </div>
@@ -451,24 +893,46 @@ export default function Panel() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Diseñador</th><th>Notas</th><th>Acciones</th>
+                      <th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Progreso</th><th>Diseñador</th><th>Notas</th><th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody id="ordersBody">
                     {loading ? (
-                      <tr><td colSpan="8">Cargando pedidos...</td></tr>
+                      <tr><td colSpan="9">Cargando pedidos...</td></tr>
                     ) : orders.length ? (
                       orders.map((order) => (
                         <tr key={order.id}>
                           <td>{order.createdAt ? new Date(order.createdAt).toLocaleString() : ""}</td>
                           <td><strong>{order.name}</strong><br /><span className="hint">{order.phone}</span></td>
                           <td>{order.service}<br /><span className="hint">{order.quantity || ""}</span></td>
-                          <td>{order.file ? <a href={order.file} target="_blank" rel="noreferrer">{order.fileName || "Ver archivo"}</a> : order.fileName || "Sin archivo"}</td>
+                          <td>
+                            <div className="order-file-list">
+                              {order.file ? <a href={order.file} target="_blank" rel="noreferrer">{order.fileName || "Archivo principal"}</a> : order.fileName || "Sin archivo"}
+                              {Array.isArray(order.attachments) && order.attachments.length ? (
+                                <div className="order-attachment-list">
+                                  {order.attachments.map((attachment, attachmentIndex) => (
+                                    <a href={attachment.file} target="_blank" rel="noreferrer" key={attachment.id || attachment.file}>
+                                      PNG {attachmentIndex + 1}: {attachment.originalName || "Ver imagen"}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
                           <td>
                             <span className={`status ${statusClass(order.status)}`}>{order.status}</span><br />
                             <select value={order.status} onChange={(event) => handleOrderFieldChange(order.id, "status", event.target.value)} disabled={savingOrderId === order.id}>
                               {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
                             </select>
+                          </td>
+                          <td>
+                            <div className="panel-progress-cell">
+                              <div className="tracking-progress-bar mini" aria-label={`Progreso ${order.currentProgress || 0}%`}>
+                                <span style={{ width: `${order.currentProgress || 0}%` }} />
+                              </div>
+                              <strong>{order.currentProgress || 0}%</strong>
+                              <span className="hint">{order.statusMessage || ""}</span>
+                            </div>
                           </td>
                           <td>
                             {isAdmin ? (
@@ -503,12 +967,15 @@ export default function Panel() {
                               <button className="btn small green" type="button" onClick={() => handleWhatsApp(order)}>
                                 Enviar WhatsApp
                               </button>
+                              <button className="btn soft small" type="button" onClick={() => handleCopyTrackingLink(order)}>
+                                Copiar seguimiento
+                              </button>
                             </div>
                           </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan="8">No hay pedidos aún.</td></tr>
+                      <tr><td colSpan="9">No hay pedidos aún.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -538,6 +1005,27 @@ export default function Panel() {
                       </label>
                     ))}
                   </div>
+                  {section.key === "about" ? (
+                    <div className="about-card-editor">
+                      <div className="panel-section-header">
+                        <div><span className="badge">Cuadros</span><h3>Texto e imágenes de asesoría</h3></div>
+                        <button className="btn small" type="button" onClick={addAboutCard}>Agregar cuadro</button>
+                      </div>
+                      <div className="about-card-editor-grid">
+                        {(siteData.about?.cards || []).map((card, index) => (
+                          <article className="about-card-editor-item" key={card.id || `new-${index}`}>
+                            <div className="about-card-preview">
+                              {card.previewUrl || card.image ? <img src={card.previewUrl || card.image} alt={card.title || `Cuadro ${index + 1}`} /> : <span>Imagen</span>}
+                            </div>
+                            <label>Título<input value={card.title || ""} onChange={(event) => updateAboutCard(index, "title", event.target.value)} /></label>
+                            <label>Texto<textarea value={card.text || ""} onChange={(event) => updateAboutCard(index, "text", event.target.value)} /></label>
+                            <label>Imagen<input type="file" accept="image/*" onChange={(event) => updateAboutCard(index, "imageFile", event.target.files?.[0] || null)} /></label>
+                            <button className="btn soft small" type="button" onClick={() => removeAboutCard(index)}>Eliminar cuadro</button>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               ))}
 
@@ -563,6 +1051,35 @@ export default function Panel() {
                 </div>
               </section>
             </div>
+          ) : null}
+
+          {isAdmin && activeTab === "catalog" ? (
+            <section className="card panel-block">
+              <div className="panel-section-header">
+                <div><span className="badge">Catálogo</span><h3>Productos del front</h3></div>
+                <div className="panel-action-row">
+                  <button className="btn soft small" type="button" onClick={addCatalogProduct}>Agregar producto</button>
+                  <button className="btn small" type="button" onClick={saveCatalogProducts} disabled={savingSection === "catalog"}>
+                    {savingSection === "catalog" ? "Guardando..." : "Guardar catálogo"}
+                  </button>
+                </div>
+              </div>
+              <div className="catalog-editor-grid">
+                {catalogProducts.map((product, index) => (
+                  <article className="catalog-editor-item" key={product.id || `product-${index}`}>
+                    <div className="catalog-editor-preview">
+                      {product.previewUrl || product.image ? <img src={product.previewUrl || product.image} alt={product.name || `Producto ${index + 1}`} /> : <span>Imagen</span>}
+                    </div>
+                    <label>Nombre<input value={product.name || ""} onChange={(event) => updateCatalogProduct(index, "name", event.target.value)} /></label>
+                    <label>Descripción<textarea value={product.description || ""} onChange={(event) => updateCatalogProduct(index, "description", event.target.value)} /></label>
+                    <label>Precio<input type="number" min="0" step="1" value={product.price || ""} onChange={(event) => updateCatalogProduct(index, "price", event.target.value)} /></label>
+                    <label>Imagen<input type="file" accept="image/*" onChange={(event) => updateCatalogProduct(index, "imageFile", event.target.files?.[0] || null)} /></label>
+                    <label className="panel-inline-toggle"><input type="checkbox" checked={product.active !== false} onChange={(event) => updateCatalogProduct(index, "active", event.target.checked)} />Visible</label>
+                    <button className="btn soft small" type="button" onClick={() => removeCatalogProduct(index)}>Eliminar producto</button>
+                  </article>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           {isAdmin && activeTab === "users" ? (

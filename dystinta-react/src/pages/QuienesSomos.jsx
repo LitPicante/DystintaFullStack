@@ -30,21 +30,35 @@ export default function QuienesSomos() {
     const raw = site?.general?.whatsappRaw || "";
     return raw ? `https://wa.me/${raw}` : "#";
   }, [site]);
+  const aboutCards = site?.about?.cards || [];
 
   if (error) return <div className="section"><div className="container"><div className="notice danger">{error}</div></div></div>;
   if (!site) return <div className="section"><div className="container"><div className="notice">Cargando...</div></div></div>;
 
   return (
     <>
-      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} />
+      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
 
       <section className="section">
         <div className="container">
           <span className="badge">Guía práctica</span>
-          <h2>Asesoría de producción</h2>
+          <h2>{site.about?.title || "Asesoría de producción"}</h2>
           <p className="lead">
-            Referencia rápida para trabajar mejor con serigrafía, sublimación y DTF. Los tiempos y temperaturas pueden variar según máquina, tinta, film, tela y presión, pero esta base sirve para orientar decisiones comerciales y productivas.
+            {site.about?.text || "Referencia rápida para trabajar mejor con serigrafía, sublimación y DTF. Los tiempos y temperaturas pueden variar según máquina, tinta, film, tela y presión, pero esta base sirve para orientar decisiones comerciales y productivas."}
           </p>
+          {aboutCards.length ? (
+            <div className="about-dynamic-grid">
+              {aboutCards.map((card) => (
+                <article className="about-dynamic-card" key={card.id}>
+                  {card.image ? <img src={card.image} alt={card.title} /> : null}
+                  <div>
+                    <h3>{card.title}</h3>
+                    <p>{card.text}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
           <div className="grid-3">
             <article className="info-card">
               <h3>DTF Textil</h3>

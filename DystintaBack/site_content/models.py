@@ -14,6 +14,12 @@ class SiteSettings(TimestampedModel):
     email = models.EmailField(blank=True)
     address = models.CharField(max_length=255, blank=True)
     map_url = models.URLField(blank=True)
+    theme_primary = models.CharField(max_length=20, default="#8b4bff")
+    theme_secondary = models.CharField(max_length=20, default="#6a2db8")
+    theme_accent = models.CharField(max_length=20, default="#d7b8ff")
+    theme_background = models.CharField(max_length=20, default="#0b0613")
+    theme_surface = models.CharField(max_length=20, default="#ffffff")
+    theme_text = models.CharField(max_length=20, default="#ffffff")
 
     def __str__(self):
         return "SiteSettings"
@@ -37,6 +43,20 @@ class AboutContent(TimestampedModel):
 
     def __str__(self):
         return "AboutContent"
+
+
+class AboutContentCard(TimestampedModel):
+    about = models.ForeignKey(AboutContent, on_delete=models.CASCADE, related_name="cards")
+    title = models.CharField(max_length=255)
+    text = models.TextField(blank=True)
+    image = models.ImageField(upload_to="site/about/", null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.title
 
 
 class ServicesContent(TimestampedModel):
@@ -73,3 +93,18 @@ class ContactContent(TimestampedModel):
 
     def __str__(self):
         return "ContactContent"
+
+
+class CatalogProduct(TimestampedModel):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    image = models.ImageField(upload_to="site/catalog/", null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.name

@@ -36,7 +36,7 @@ export default function Servicios() {
 
   return (
     <>
-      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} />
+      <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
 
       <section className="section">
         <div className="container">

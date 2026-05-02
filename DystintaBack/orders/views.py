@@ -1,22 +1,24 @@
 from django.db.models import Q
 from rest_framework import status, viewsets
+from rest_framework.generics import RetrieveAPIView
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from core.permissions import IsAdminOrDesigner
-from .models import Order
+from .models import Order, OrderAttachment
 from .serializers import (
     OrderCreateSerializer,
     OrderDetailSerializer,
     OrderListSerializer,
     OrderStatsSerializer,
+    OrderTrackingSerializer,
     OrderUpdateSerializer,
 )
 
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.select_related("assigned_to").all().order_by("-created_at")
+    queryset = Order.objects.select_related("assigned_to").prefetch_related("attachments").all().order_by("-created_at")
     http_method_names = ["get", "post", "patch"]
 
     def get_permissions(self):
@@ -25,7 +27,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         return [IsAdminOrDesigner()]
 
     def get_queryset(self):
-        queryset = Order.objects.select_related("assigned_to").all().order_by("-created_at")
+        queryset = Order.objects.select_related("assigned_to").prefetch_related("attachments").all().order_by("-created_at")
         user = self.request.user
 
         if user.is_authenticated and user.role == "designer":
@@ -73,6 +75,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
+        for uploaded_file in request.FILES.getlist("attachments"):
+            OrderAttachment.objects.create(
+                order=order,
+                file=uploaded_file,
+                original_name=uploaded_file.name,
+            )
         output = OrderCreateSerializer(order, context={"request": request})
         return Response(output.data, status=status.HTTP_201_CREATED)
 
@@ -89,9 +97,19 @@ class OrderViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         data = {
             "total": queryset.count(),
-            "new": queryset.filter(status=Order.STATUS_NUEVO).count(),
+            "new": queryset.filter(status=Order.STATUS_ARCHIVO_RECIBIDO).count(),
             "design": queryset.filter(status=Order.STATUS_DISENO).count(),
-            "done": queryset.filter(status=Order.STATUS_FINALIZADO).count(),
+            "done": queryset.filter(status__in=[Order.STATUS_ENTREGADO, Order.STATUS_FINALIZADO]).count(),
         }
         serializer = OrderStatsSerializer(data)
         return Response(serializer.data)
+
+
+class OrderTrackingView(RetrieveAPIView):
+    serializer_class = OrderTrackingSerializer
+    permission_classes = [AllowAny]
+    lookup_field = "tracking_token"
+    lookup_url_kwarg = "token"
+
+    def get_queryset(self):
+        return Order.objects.filter(tracking_enabled=True, tracking_token__isnull=False)

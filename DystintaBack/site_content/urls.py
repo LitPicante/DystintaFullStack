@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     AboutContentView,
     CalcContentView,
+    CatalogContentView,
     ContactContentView,
     DesignsContentView,
     GeneralContentView,
@@ -20,4 +21,5 @@ urlpatterns = [
     path("site/designs/", DesignsContentView.as_view(), name="site-designs"),
     path("site/calc/", CalcContentView.as_view(), name="site-calc"),
     path("site/contact/", ContactContentView.as_view(), name="site-contact"),
+    path("site/catalog/", CatalogContentView.as_view(), name="site-catalog"),
 ]
