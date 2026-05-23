@@ -8,8 +8,12 @@ from core.models import TimestampedModel
 
 
 class Order(TimestampedModel):
+    STATUS_NUEVO = "Nuevo"
+    STATUS_EN_REVISION = "En revisi\u00f3n"
     STATUS_ARCHIVO_RECIBIDO = "Archivo recibido"
     STATUS_DISENO = "En diseño"
+    STATUS_APROBACION_CLIENTE = "Aprobaci\u00f3n cliente"
+    STATUS_PRODUCCION = "Producci\u00f3n"
     STATUS_EN_COLA = "En cola"
     STATUS_IMPRIMIENDO = "Imprimiendo"
     STATUS_LISTO_RETIRAR = "Listo para retirar"
@@ -18,8 +22,12 @@ class Order(TimestampedModel):
     STATUS_FINALIZADO = "Finalizado"
 
     STATUS_CHOICES = (
+        (STATUS_NUEVO, "Nuevo"),
+        (STATUS_EN_REVISION, "En revisi\u00f3n"),
         (STATUS_ARCHIVO_RECIBIDO, "Archivo recibido"),
         (STATUS_DISENO, "En diseño"),
+        (STATUS_APROBACION_CLIENTE, "Aprobaci\u00f3n cliente"),
+        (STATUS_PRODUCCION, "Producci\u00f3n"),
         (STATUS_EN_COLA, "En cola"),
         (STATUS_IMPRIMIENDO, "Imprimiendo"),
         (STATUS_LISTO_RETIRAR, "Listo para retirar"),
@@ -29,8 +37,12 @@ class Order(TimestampedModel):
     )
 
     STATUS_PROGRESS = {
+        STATUS_NUEVO: 10,
+        STATUS_EN_REVISION: 18,
         STATUS_ARCHIVO_RECIBIDO: 10,
         STATUS_DISENO: 25,
+        STATUS_APROBACION_CLIENTE: 35,
+        STATUS_PRODUCCION: 65,
         STATUS_EN_COLA: 40,
         STATUS_IMPRIMIENDO: 65,
         STATUS_LISTO_RETIRAR: 85,
@@ -39,6 +51,10 @@ class Order(TimestampedModel):
     }
 
     STATUS_MESSAGES = {
+        STATUS_NUEVO: "Tu pedido fue recibido correctamente.",
+        STATUS_EN_REVISION: "Tu pedido est\u00e1 siendo revisado.",
+        STATUS_APROBACION_CLIENTE: "Tu dise\u00f1o est\u00e1 listo para aprobaci\u00f3n.",
+        STATUS_PRODUCCION: "Tu pedido pas\u00f3 a producci\u00f3n.",
         STATUS_ARCHIVO_RECIBIDO: "Recibimos tu archivo y estamos validando el material.",
         STATUS_DISENO: "Tu pedido está en preparación de diseño.",
         STATUS_EN_COLA: "Tu pedido está en cola de producción.",
@@ -67,7 +83,7 @@ class Order(TimestampedModel):
     details = models.TextField(blank=True)
     file = models.FileField(upload_to="orders/", null=True, blank=True)
     file_name = models.CharField(max_length=255, blank=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_ARCHIVO_RECIBIDO)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_NUEVO)
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

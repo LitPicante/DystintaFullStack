@@ -34,8 +34,8 @@ export const orderService = {
   create(payload, config) {
     return api.post("/orders/", payload, config).then((response) => response.data);
   },
-  update(id, payload) {
-    return api.patch(`/orders/${id}/`, payload).then((response) => response.data);
+  update(id, payload, config) {
+    return api.patch(`/orders/${id}/`, payload, config).then((response) => response.data);
   },
   getTracking(token) {
     return api.get(`/orders/tracking/${token}/`).then((response) => response.data);

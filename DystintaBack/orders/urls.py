@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import OrderTrackingView, OrderViewSet
+from .views import OrderTrackingView, OrderViewSet, WhatsAppWebhookView
 
 order_list = OrderViewSet.as_view({"get": "list", "post": "create"})
 order_detail = OrderViewSet.as_view({"get": "retrieve", "patch": "partial_update"})
@@ -11,4 +11,5 @@ urlpatterns = [
     path("orders/stats/", order_stats, name="orders-stats"),
     path("orders/tracking/<str:token>/", OrderTrackingView.as_view(), name="orders-tracking"),
     path("orders/<int:pk>/", order_detail, name="orders-detail"),
+    path("whatsapp/webhook/", WhatsAppWebhookView.as_view(), name="whatsapp-webhook"),
 ]

@@ -1,5 +1,7 @@
 from django.db.models import Q
+from django.db import transaction
 from rest_framework import status, viewsets
+from rest_framework.views import APIView
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -15,6 +17,7 @@ from .serializers import (
     OrderTrackingSerializer,
     OrderUpdateSerializer,
 )
+from .services.whatsapp_service import process_evolution_webhook, send_order_status_message_on_commit
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -74,21 +77,27 @@ class OrderViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = serializer.save()
-        for uploaded_file in request.FILES.getlist("attachments"):
-            OrderAttachment.objects.create(
-                order=order,
-                file=uploaded_file,
-                original_name=uploaded_file.name,
-            )
+        with transaction.atomic():
+            order = serializer.save()
+            for uploaded_file in request.FILES.getlist("attachments"):
+                OrderAttachment.objects.create(
+                    order=order,
+                    file=uploaded_file,
+                    original_name=uploaded_file.name,
+                )
+            send_order_status_message_on_commit(order)
         output = OrderCreateSerializer(order, context={"request": request})
         return Response(output.data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
+        previous_status = instance.status
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        with transaction.atomic():
+            order = serializer.save()
+            if previous_status != order.status:
+                send_order_status_message_on_commit(order)
         output = OrderDetailSerializer(instance, context={"request": request})
         return Response(output.data, status=status.HTTP_200_OK)
 
@@ -113,3 +122,11 @@ class OrderTrackingView(RetrieveAPIView):
 
     def get_queryset(self):
         return Order.objects.filter(tracking_enabled=True, tracking_token__isnull=False)
+
+
+class WhatsAppWebhookView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        result = process_evolution_webhook(request.data if isinstance(request.data, dict) else {})
+        return Response(result, status=status.HTTP_200_OK)

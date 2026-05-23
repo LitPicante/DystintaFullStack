@@ -6,9 +6,14 @@ from rest_framework import serializers
 from accounts.serializers import UserSerializer
 from accounts.models import User
 from .models import Order, OrderAttachment
+from .services.whatsapp_service import build_order_status_message
 
 
 STATUS_MESSAGE_MAP = {
+    Order.STATUS_NUEVO: "recibido correctamente.",
+    Order.STATUS_EN_REVISION: "siendo revisado.",
+    Order.STATUS_APROBACION_CLIENTE: "listo para aprobaci\u00f3n del cliente.",
+    Order.STATUS_PRODUCCION: "en producci\u00f3n.",
     Order.STATUS_ARCHIVO_RECIBIDO: "recibido y registrado en nuestro sistema.",
     Order.STATUS_DISENO: "en preparación de diseño.",
     Order.STATUS_EN_COLA: "en cola de producción.",
@@ -26,12 +31,7 @@ def normalize_whatsapp_phone(value):
 
 
 def build_order_status_whatsapp_message(order):
-    status_text = STATUS_MESSAGE_MAP.get(order.status, f"actualizado a {order.status}.")
-    return (
-        f"Hola {order.name}, tu pedido de {order.service} "
-        f"se encuentra {status_text} "
-        "Gracias por confiar en Dystinta."
-    )
+    return build_order_status_message(order)
 
 
 def build_order_status_whatsapp_url(order):
@@ -82,7 +82,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         uploaded_file = validated_data.get("file")
         if uploaded_file and not validated_data.get("file_name"):
             validated_data["file_name"] = uploaded_file.name
-        validated_data.setdefault("status", Order.STATUS_ARCHIVO_RECIBIDO)
+        validated_data.setdefault("status", Order.STATUS_NUEVO)
         validated_data.setdefault("notes", "")
         validated_data.setdefault("extra_data", {})
         return super().create(validated_data)

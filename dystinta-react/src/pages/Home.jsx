@@ -1,62 +1,24 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import api from "../services/api";
+import { useMemo } from "react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import Carrusel from "../components/Carrusel";
+import usePublicSite from "../hooks/usePublicSite";
 
 export default function Home() {
-  const [site, setSite] = useState(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadSite() {
-      try {
-        const { data } = await api.get("/site/public/");
-        if (mounted) setSite(data);
-      } catch (err) {
-        if (mounted) setError("No se pudo cargar la información del sitio.");
-      }
-    }
-
-    loadSite();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { site, error: siteError } = usePublicSite();
 
   const whatsappLink = useMemo(() => {
     const raw = site?.general?.whatsappRaw || "";
     return raw ? `https://wa.me/${raw}` : "#";
   }, [site]);
 
-  if (error) {
-    return (
-      <div className="section">
-        <div className="container">
-          <div className="notice danger">{error}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!site) {
-    return (
-      <div className="section">
-        <div className="container">
-          <div className="notice">Cargando...</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="home-shell">
       <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
 
       <main>
+        {siteError ? <div className="container offline-notice"><div className="notice danger">{siteError}</div></div> : null}
         <section className="home-hero">
           <Carrusel captions={site.home} />
 

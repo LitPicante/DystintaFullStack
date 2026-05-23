@@ -1,0 +1,133 @@
+# Docker Compose privado para Evolution API.
+# Este archivo NO publica Evolution API en Internet: el puerto queda ligado a 127.0.0.1.
+# Flujo esperado: Django en el VPS llama a http://127.0.0.1:8080 y Evolution API responde solo localmente.
+
+services:
+  evolution-api:
+    # Imagen oficial usada por la documentacion actual de Evolution API.
+    # En produccion conviene fijar una version concreta en .env, por ejemplo:
+    # EVOLUTION_API_IMAGE=evoapicloud/evolution-api:v2.3.0
+    image: ${EVOLUTION_API_IMAGE:-evoapicloud/evolution-api:latest}
+    container_name: dystinta-evolution-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # URL interna. No debe apuntar a un dominio publico porque este servicio es privado.
+      SERVER_URL: ${SERVER_URL:-http://127.0.0.1:8080}
+
+      # Clave obligatoria para consumir la API. Debe ser larga y secreta en produccion.
+      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY}
+
+      # Nombre que vera WhatsApp Web como cliente/dispositivo conectado.
+      CONFIG_SESSION_PHONE_CLIENT: ${CONFIG_SESSION_PHONE_CLIENT:-Dystinta WhatsApp}
+
+      # Persistencia principal en Postgres interno.
+      DATABASE_ENABLED: ${DATABASE_ENABLED:-true}
+      DATABASE_PROVIDER: ${DATABASE_PROVIDER:-postgresql}
+      DATABASE_CONNECTION_URI: ${DATABASE_CONNECTION_URI}
+      DATABASE_CONNECTION_CLIENT_NAME: ${DATABASE_CONNECTION_CLIENT_NAME:-dystinta-whatsapp}
+      DATABASE_SAVE_DATA_INSTANCE: ${DATABASE_SAVE_DATA_INSTANCE:-true}
+      DATABASE_SAVE_DATA_NEW_MESSAGE: ${DATABASE_SAVE_DATA_NEW_MESSAGE:-true}
+      DATABASE_SAVE_MESSAGE_UPDATE: ${DATABASE_SAVE_MESSAGE_UPDATE:-true}
+      DATABASE_SAVE_DATA_CONTACTS: ${DATABASE_SAVE_DATA_CONTACTS:-true}
+      DATABASE_SAVE_DATA_CHATS: ${DATABASE_SAVE_DATA_CHATS:-true}
+
+      # Redis interno para cache/eventos. No se expone fuera de Docker.
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      CACHE_REDIS_URI: ${CACHE_REDIS_URI:-redis://redis:6379/0}
+      CACHE_REDIS_PREFIX_KEY: ${CACHE_REDIS_PREFIX_KEY:-dystinta}
+      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
+
+      # Webhooks internos hacia Django. La URL apunta al host del VPS desde el contenedor.
+      # En Linux Docker, host.docker.internal queda resuelto por extra_hosts abajo.
+      WEBHOOK_GLOBAL_ENABLED: ${WEBHOOK_GLOBAL_ENABLED:-true}
+      WEBHOOK_GLOBAL_URL: ${WEBHOOK_GLOBAL_URL:-http://host.docker.internal:8000/api/whatsapp/webhook/}
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: ${WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS:-true}
+
+      # WebSocket desactivado por defecto: no hace falta para el flujo backend interno.
+      WEBSOCKET_ENABLED: ${WEBSOCKET_ENABLED:-false}
+
+      # CORS restringido al origen local. Como Evolution no es publico, esto es defensivo.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://127.0.0.1:8000,http://localhost:8000}
+      CORS_METHODS: ${CORS_METHODS:-GET,POST,PUT,DELETE}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-true}
+
+      # Ajustes operativos.
+      TZ: ${TZ:-America/Asuncion}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    ports:
+      # MUY IMPORTANTE:
+      # 127.0.0.1:8080:8080 impide acceso externo directo al puerto.
+      # Desde el VPS se accede con http://127.0.0.1:8080.
+      - "${EVOLUTION_BIND_HOST:-127.0.0.1}:${EVOLUTION_PORT:-8080}:8080"
+
+    volumes:
+      # Sesiones persistentes de WhatsApp. Hacer backup frecuente.
+      - ./sessions:/evolution/instances
+      # Carpeta local para datos auxiliares que Evolution pueda persistir.
+      - ./data/evolution:/evolution/store
+      # Carpeta local para logs/diagnostico si la imagen escribe en este path.
+      - ./logs:/evolution/logs
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+    networks:
+      - dystinta-whatsapp-internal
+
+    extra_hosts:
+      # Permite que el contenedor llegue al Django del host Linux con:
+      # http://host.docker.internal:8000
+      - "host.docker.internal:host-gateway"
+
+    healthcheck:
+      # Comprueba que el proceso HTTP responda dentro del contenedor.
+      # No depende de curl/wget; usa Node, disponible en la imagen de Evolution API.
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080').then(() => process.exit(0)).catch(() => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dystinta-whatsapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-evolution}
+      POSTGRES_USER: ${POSTGRES_USER:-evolution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ:-America/Asuncion}
+    volumes:
+      # Base de datos persistente. Esta carpeta debe entrar en backups.
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - dystinta-whatsapp-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-evolution} -d ${POSTGRES_DB:-evolution}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: dystinta-whatsapp-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      TZ: ${TZ:-America/Asuncion}
+    volumes:
+      # Redis append-only file para conservar estado de cache/eventos si aplica.
+      - ./data/redis:/data
+    networks:
+      - dystinta-whatsapp-internal
+
+networks:
+  dystinta-whatsapp-internal:
+    # Red interna de Docker. No crea entrada publica ni requiere Nginx.
+    driver: bridge

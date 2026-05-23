@@ -3,9 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo-dystinta.jpg";
 import { adminToolsService, authService, mediaService, orderService, siteService, userService } from "../services/backend";
 
-const STATUS_OPTIONS = ["Archivo recibido", "En diseño", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado"];
+const STATUS_OPTIONS = ["Nuevo", "En revisión", "Archivo recibido", "En diseño", "Aprobación cliente", "Producción", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado"];
 const SERVICE_OPTIONS = ["DTF Textil", "DTF UV", "Serigrafía"];
 const COMPLETED_STATUSES = ["Entregado", "Finalizado"];
+const ORDER_UPDATE_TIMEOUT_MS = 20000;
 const EMPTY_USER_FORM = { username: "", password: "", role: "designer", name: "", is_active: true };
 const SITE_SECTIONS = [
   { key: "general", title: "General", endpoint: "general", fields: [
@@ -41,8 +42,12 @@ const SITE_SECTIONS = [
 
 function statusClass(status) {
   return {
+    Nuevo: "s-nuevo",
+    "En revisión": "s-revision",
     "Archivo recibido": "s-archivo",
     "En diseño": "s-diseno",
+    "Aprobación cliente": "s-aprobacion",
+    Producción: "s-produccion",
     "En cola": "s-cola",
     Imprimiendo: "s-imprimiendo",
     "Listo para retirar": "s-listo",
@@ -52,15 +57,17 @@ function statusClass(status) {
   }[status] || "s-archivo";
 }
 
-// eslint-disable-next-line no-unused-vars
-function buildWhatsAppMessage(order) {
-  return `Pedido ${order.service}
-Cliente: ${order.name}
-Teléfono: ${order.phone}
-Cantidad: ${order.quantity || ""}
-Archivo: ${order.fileName || "Sin archivo"}
-Estado: ${order.status}
-Notas: ${order.notes || ""}`;
+function isWaitingForCustomerApproval(status) {
+  return status === "Aprobación cliente";
+}
+
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
 }
 
 function downloadJson(filename, data) {
@@ -449,16 +456,6 @@ export default function Panel() {
     navigate("/admin");
   }
 
-  function handleWhatsApp(order) {
-    if (!order.whatsappUrl) {
-      setError("El pedido no tiene un teléfono válido para WhatsApp.");
-      setSuccess("");
-      return;
-    }
-
-    window.open(order.whatsappUrl, "_blank");
-  }
-
   async function handleCopyTrackingLink(order) {
     const url = buildTrackingUrl(order);
     if (!url) {
@@ -608,13 +605,21 @@ export default function Panel() {
   async function updateOrder(id, payload) {
     setSavingOrderId(id);
     setError("");
+    setSuccess("");
     try {
-      await orderService.update(id, payload);
+      // El backend envia la notificacion de WhatsApp automaticamente al cambiar el estado.
+      const updatedOrder = await withTimeout(
+        orderService.update(id, payload, { timeout: ORDER_UPDATE_TIMEOUT_MS }),
+        ORDER_UPDATE_TIMEOUT_MS + 1000,
+        "La actualización tardó demasiado. Verificá la conexión con el backend."
+      );
+      setOrders((current) => current.map((order) => (order.id === id ? { ...order, ...updatedOrder } : order)));
       await loadOrders();
       await loadDashboardOrders();
-      setSuccess("Pedido actualizado.");
-    } catch {
-      setError("No se pudo actualizar el pedido.");
+      setSuccess("Estado actualizado y notificación enviada automáticamente.");
+    } catch (err) {
+      setError(err?.message || "No se pudo actualizar el pedido.");
+      setSuccess("");
     } finally {
       setSavingOrderId(null);
     }
@@ -944,6 +949,9 @@ export default function Panel() {
                           </td>
                           <td>
                             <span className={`status ${statusClass(order.status)}`}>{order.status}</span><br />
+                            {isWaitingForCustomerApproval(order.status) ? (
+                              <span className="status s-aprobacion order-auto-notice">Esperando respuesta del cliente</span>
+                            ) : null}
                             <select value={order.status} onChange={(event) => handleOrderFieldChange(order.id, "status", event.target.value)} disabled={savingOrderId === order.id}>
                               {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
                             </select>
@@ -986,9 +994,6 @@ export default function Panel() {
                                 disabled={savingOrderId === order.id}
                               >
                                 {savingOrderId === order.id ? "Guardando..." : "Actualizar estado"}
-                              </button>
-                              <button className="btn small green" type="button" onClick={() => handleWhatsApp(order)}>
-                                Enviar WhatsApp
                               </button>
                               <button className="btn soft small" type="button" onClick={() => handleCopyTrackingLink(order)}>
                                 Copiar seguimiento

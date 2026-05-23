@@ -1,0 +1,136 @@
+{
+  "_comment": "Payloads simulados para documentar el contrato futuro Evolution API -> Django. Son ejemplos realistas, no datos reales de clientes.",
+  "message_received": {
+    "event": "messages.upsert",
+    "instance": "dystinta-main",
+    "data": {
+      "key": {
+        "remoteJid": "595981123456@s.whatsapp.net",
+        "fromMe": false,
+        "id": "BAE5F8D2B05D4B77"
+      },
+      "pushName": "Cliente Dystinta",
+      "message": {
+        "conversation": "Hola, quiero saber si mi pedido ya esta listo"
+      },
+      "messageType": "conversation",
+      "messageTimestamp": 1784569200,
+      "source": "android"
+    },
+    "destination": "http://host.docker.internal:8000/api/whatsapp/webhook/",
+    "date_time": "2026-07-20T09:20:00-04:00",
+    "sender": "595981000000@s.whatsapp.net",
+    "server_url": "http://127.0.0.1:8080",
+    "apikey": "masked"
+  },
+  "message_sent": {
+    "event": "messages.upsert",
+    "instance": "dystinta-main",
+    "data": {
+      "key": {
+        "remoteJid": "595981123456@s.whatsapp.net",
+        "fromMe": true,
+        "id": "3EB0A1C9F9164F2E9D11"
+      },
+      "message": {
+        "conversation": "Tu pedido DTF Textil paso a revision. Responde 1 para aprobar o 2 para solicitar cambios."
+      },
+      "messageType": "conversation",
+      "messageTimestamp": 1784569260,
+      "status": "PENDING"
+    },
+    "destination": "http://host.docker.internal:8000/api/whatsapp/webhook/",
+    "date_time": "2026-07-20T09:21:00-04:00",
+    "sender": "595981000000@s.whatsapp.net",
+    "server_url": "http://127.0.0.1:8080",
+    "apikey": "masked"
+  },
+  "client_reply_approval": {
+    "event": "messages.upsert",
+    "instance": "dystinta-main",
+    "data": {
+      "key": {
+        "remoteJid": "595981123456@s.whatsapp.net",
+        "fromMe": false,
+        "id": "BAE5DYSTINTAAPPROVAL1"
+      },
+      "pushName": "Cliente Dystinta",
+      "message": {
+        "conversation": "1"
+      },
+      "messageType": "conversation",
+      "messageTimestamp": 1784569560,
+      "contextInfo": {
+        "stanzaId": "3EB0A1C9F9164F2E9D11",
+        "participant": "595981000000@s.whatsapp.net"
+      }
+    },
+    "business_context": {
+      "expected_future_action": "Django interpreta 1 como aprobacion del pedido y cambia estado a aprobado/produccion.",
+      "order_reference": "ORD-2026-00042"
+    },
+    "destination": "http://host.docker.internal:8000/api/whatsapp/webhook/",
+    "date_time": "2026-07-20T09:26:00-04:00",
+    "server_url": "http://127.0.0.1:8080"
+  },
+  "client_reply_rejection": {
+    "event": "messages.upsert",
+    "instance": "dystinta-main",
+    "data": {
+      "key": {
+        "remoteJid": "595981123456@s.whatsapp.net",
+        "fromMe": false,
+        "id": "BAE5DYSTINTAREJECT2"
+      },
+      "pushName": "Cliente Dystinta",
+      "message": {
+        "conversation": "2 - Cambiar el logo a color blanco"
+      },
+      "messageType": "conversation",
+      "messageTimestamp": 1784569620
+    },
+    "business_context": {
+      "expected_future_action": "Django interpreta 2 como rechazo/solicitud de cambios y guarda comentario del cliente.",
+      "order_reference": "ORD-2026-00042"
+    },
+    "destination": "http://host.docker.internal:8000/api/whatsapp/webhook/",
+    "date_time": "2026-07-20T09:27:00-04:00",
+    "server_url": "http://127.0.0.1:8080"
+  },
+  "delivery": {
+    "event": "messages.update",
+    "instance": "dystinta-main",
+    "data": {
+      "key": {
+        "remoteJid": "595981123456@s.whatsapp.net",
+        "fromMe": true,
+        "id": "3EB0A1C9F9164F2E9D11"
+      },
+      "update": {
+        "status": "DELIVERY_ACK"
+      },
+      "messageTimestamp": 1784569320
+    },
+    "meaning": "WhatsApp reporto que el mensaje fue entregado al dispositivo del cliente.",
+    "destination": "http://host.docker.internal:8000/api/whatsapp/webhook/",
+    "date_time": "2026-07-20T09:22:00-04:00"
+  },
+  "read_receipt": {
+    "event": "messages.update",
+    "instance": "dystinta-main",
+    "data": {
+      "key": {
+        "remoteJid": "595981123456@s.whatsapp.net",
+        "fromMe": true,
+        "id": "3EB0A1C9F9164F2E9D11"
+      },
+      "update": {
+        "status": "READ"
+      },
+      "messageTimestamp": 1784569440
+    },
+    "meaning": "WhatsApp reporto que el cliente leyo el mensaje.",
+    "destination": "http://host.docker.internal:8000/api/whatsapp/webhook/",
+    "date_time": "2026-07-20T09:24:00-04:00"
+  }
+}
