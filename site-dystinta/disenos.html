@@ -1,0 +1,97 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dystinta | Diseños</title><link rel="stylesheet" href="styles.css"></head><body>
+<header class="topbar home-topbar home-logo-bar"><div class="container nav"><a class="brand" href="index.html"><img src="assets/logo-dystinta.jpg" alt="logo"><div><span data-company></span><small data-slogan></small></div></a></div></header>
+<section class="home-hero"><div class="container home-nav-panel"><div class="home-action-strip home-action-strip-nav"><p>Ingresá al módulo o formulario del servicio que prefieras y enviá tu pedido.</p><nav class="nav-links home-pill-grid home-pill-grid-primary"><a class="home-service-pill" href="index.html">Inicio</a><a class="home-service-pill" href="quienes-somos.html">Asesoría</a><a class="home-service-pill" href="servicios.html">Servicios</a><a class="home-service-pill" href="pedidos.html">Pedidos</a><a class="home-service-pill" href="disenos.html">Mockup</a><a class="home-service-pill" href="calculadora.html">Calculadora DTF</a><a class="home-service-pill" href="contacto.html">Contacto</a><a class="home-service-pill" href="admin.html">Back office</a><a class="home-service-pill" href="panel.html">Panel pedidos</a></nav></div></div></section>
+<section class="section"><div class="container"><h2>Área de diseño</h2><p class="lead">Espacio visual para mostrar herramientas de diseño, edición de texto, colores, figuras y preparación de piezas antes de producción.</p>
+
+<div class="design-workspace">
+  <aside class="tool-sidebar">
+    <h3>Herramientas</h3>
+    <button class="tool-btn active" data-tool="texto" type="button">Texto</button>
+    <button class="tool-btn" data-tool="colores" type="button">Colores</button>
+    <button class="tool-btn" data-tool="figuras" type="button">Figuras</button>
+    <button class="tool-btn" data-tool="fondo" type="button">Quitar fondos</button>
+    <button class="tool-btn" data-tool="capas" type="button">Capas y mockup</button>
+  </aside>
+
+  <div class="design-stage-wrap">
+    <div class="design-stage">
+      <div class="design-preview-card">
+        <div class="preview-topbar">
+          <span class="badge">Vista previa</span>
+          <span class="hint">Simulación visual para el cliente</span>
+        </div>
+        <div class="design-canvas">
+          <div class="canvas-shirt"></div>
+          <img id="designPreviewImage" class="canvas-upload hidden" alt="Diseño cargado">
+          <div id="designPreviewText" class="canvas-text">DYSTINTA</div>
+          <div id="designPreviewShape" class="canvas-shape"></div>
+        </div>
+      </div>
+
+      <div class="design-controls">
+        <section class="tool-panel active" id="tool-texto">
+          <h3>Texto</h3>
+          <div class="form-row"><label>Texto principal<input id="designTextInput" value="DYSTINTA"></label><label>Tamaño<select id="designTextSize"><option>Pequeño</option><option selected>Mediano</option><option>Grande</option></select></label></div>
+          <label>Tipografía<select><option>Sans</option><option>Bold</option><option>Script</option></select></label>
+        </section>
+
+        <section class="tool-panel" id="tool-colores">
+          <h3>Colores</h3>
+          <div class="palette-block"><strong>Paleta vibrante</strong><div class="color-palette">
+            <button class="color-chip active" data-color="#8b4bff" type="button"></button>
+            <button class="color-chip" data-color="#6a2db8" type="button"></button>
+            <button class="color-chip" data-color="#35d07f" type="button"></button>
+            <button class="color-chip" data-color="#ffcc66" type="button"></button>
+            <button class="color-chip" data-color="#0b0613" type="button"></button>
+          </div></div>
+          <div class="palette-block"><strong>Paleta pastel</strong><div class="color-palette">
+            <button class="color-chip" data-color="#f7b2d9" type="button"></button>
+            <button class="color-chip" data-color="#ffd8a8" type="button"></button>
+            <button class="color-chip" data-color="#c7f9cc" type="button"></button>
+            <button class="color-chip" data-color="#a9def9" type="button"></button>
+            <button class="color-chip" data-color="#d0bfff" type="button"></button>
+          </div></div>
+          <div class="palette-block"><strong>Paleta industrial</strong><div class="color-palette">
+            <button class="color-chip" data-color="#111827" type="button"></button>
+            <button class="color-chip" data-color="#374151" type="button"></button>
+            <button class="color-chip" data-color="#ef4444" type="button"></button>
+            <button class="color-chip" data-color="#0ea5e9" type="button"></button>
+            <button class="color-chip" data-color="#f97316" type="button"></button>
+          </div>
+          </div>
+          <p class="hint">Elegí una paleta base para piezas textiles, UV o serigrafía.</p>
+        </section>
+
+        <section class="tool-panel" id="tool-figuras">
+          <h3>Figuras</h3>
+          <div class="shape-grid">
+            <button class="shape-btn active" data-shape="circle" type="button">Círculo</button>
+            <button class="shape-btn" data-shape="square" type="button">Cuadrado</button>
+            <button class="shape-btn" data-shape="pill" type="button">Píldora</button>
+          </div>
+          <p class="hint">Usá figuras base para destacados, fondos o marcas rápidas.</p>
+        </section>
+
+        <section class="tool-panel" id="tool-fondo">
+          <h3>Quitar fondos</h3>
+          <label>Subir imagen PNG<input id="designImageInput" type="file" accept=".png,image/png"></label>
+          <div class="form-row"><button class="btn" id="designRemoveBgBtn" type="button">Quitar fondo</button><button class="btn soft" id="designResetImageBtn" type="button">Restablecer imagen</button></div>
+          <div class="form-row"><button class="btn soft" id="designImageSmallerBtn" type="button">Achicar imagen</button><button class="btn soft" id="designImageBiggerBtn" type="button">Agrandar imagen</button></div>
+          <div class="info-card"><strong>Flujo sugerido</strong><p>1. Cargar imagen PNG del cliente<br>2. Limpiar fondo por transparencia/color dominante<br>3. Revisar preview<br>4. Aprobar antes de producción</p></div>
+          <p class="hint">La carga obliga PNG para preservar transparencias y facilitar la limpieza.</p>
+        </section>
+
+        <section class="tool-panel" id="tool-capas">
+          <h3>Capas y mockup</h3>
+          <div class="info-card"><strong>Capas recomendadas</strong><p>Fondo, figura base, texto, logo y guía de corte. Esto ayuda a ordenar los diseños antes de pasarlos a impresión.</p></div>
+          <div class="mockup-toggle-list">
+            <label class="mockup-toggle"><input id="toggleDesignText" type="checkbox" checked> Mostrar texto en la remera</label>
+            <label class="mockup-toggle"><input id="toggleDesignShape" type="checkbox" checked> Mostrar figura en la remera</label>
+          </div>
+          <p class="hint">La imagen cargada se coloca sobre la prenda del mockup para visualizar tamaño y contraste.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+</div></section><footer class="footer"><div class="container"><strong data-company></strong></div></footer><script src="script.js"></script></body></html>
