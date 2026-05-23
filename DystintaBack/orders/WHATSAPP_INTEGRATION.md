@@ -11,9 +11,16 @@ EVOLUTION_API_URL=http://127.0.0.1:8080
 EVOLUTION_API_KEY=clave-configurada-en-dystinta-whatsapp
 EVOLUTION_INSTANCE_NAME=dystinta-main
 EVOLUTION_API_TIMEOUT=15
+FRONTEND_PUBLIC_URL=https://tudominio.com
 ```
 
 `EVOLUTION_API_URL` debe usar localhost porque Evolution API es privado y no esta expuesto publicamente.
+
+`FRONTEND_PUBLIC_URL` es la URL publica del frontend React. Django la usa para construir links de seguimiento como:
+
+```text
+https://tudominio.com/seguimiento/<tracking_token>
+```
 
 ## Archivos principales
 
@@ -39,6 +46,15 @@ PATCH /api/orders/<id>/
 si el campo `status` cambio, Django envia automaticamente el mensaje correspondiente mediante Evolution API.
 
 No se necesita boton "Enviar WhatsApp".
+
+Cuando el pedido ya tiene tracking activo, el mensaje incluye tambien:
+
+```text
+Avance actual: 65%
+Seguimiento del pedido: https://tudominio.com/seguimiento/<tracking_token>
+```
+
+El token de seguimiento se genera automaticamente en el modelo cuando cambia el estado del pedido.
 
 ## Estados soportados para el nuevo flujo
 
