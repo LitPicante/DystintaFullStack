@@ -200,6 +200,8 @@ var(--paper)}
 .directory-map-placeholder{min-height:180px;border-radius:18px;background:
 linear-gradient(135deg,rgba(var(--brand-rgb),.16),rgba(var(--accent-rgb),.08)),
 var(--paper);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:18px}
+.directory-map-frame{display:block;width:100%;height:220px;padding:0;background:var(--paper)}
+.directory-map-link{display:inline-flex;margin-top:10px;color:var(--brand);font-weight:800}
 .directory-links{display:grid;gap:10px;margin-top:16px}
 .directory-links a{padding:12px 14px;border-radius:14px;background:var(--paper);border:1px solid var(--line)}
 .footer-rich{margin-top:22px;padding-top:36px}
