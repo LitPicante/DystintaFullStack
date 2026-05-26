@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -9,6 +9,10 @@ const FILM_SIZES = [
   { id: "58x20", label: "58 x 20 cm", width: 58, previewLength: 20 },
 ];
 
+const CUSTOM_FILM_ID = "custom";
+const DEFAULT_CUSTOM_FILM_WIDTH = 100;
+const MIN_SPACING_CM = 0.5;
+const REPEAT_COLORS = ["#b88a37", "#4f9f8f", "#d95f59", "#6d7fd5", "#d68adf", "#7fa548", "#d7873f", "#578fd1"];
 const EMPTY_CUSTOMER = { name: "", phone: "", email: "", details: "" };
 
 function parseNumber(value, fallback = 0) {
@@ -35,6 +39,30 @@ function createDesign(index = 0) {
   };
 }
 
+function getUsableFilmWidth(film, margin = 0) {
+  return Math.max(0.1, parseNumber(film.width, 0) - parseNumber(margin, 0) * 2);
+}
+
+function getSpacingLimit(items, film, margin = 0) {
+  const usableWidth = getUsableFilmWidth(film, margin);
+  const repeatedWidths = items
+    .filter((item) => Math.max(1, Math.round(parseNumber(item.repetitions, 1))) > 1)
+    .map((item) => Math.max(0.1, parseNumber(item.width, 0.1)));
+
+  if (!repeatedWidths.length) return Infinity;
+  return Math.max(MIN_SPACING_CM, Math.min(...repeatedWidths.map((width) => usableWidth - width * 2)));
+}
+
+function normalizeDesigns(items, film, margin = 0) {
+  const usableWidth = getUsableFilmWidth(film, margin);
+  return items.map((item) => ({
+    ...item,
+    width: Math.min(usableWidth, Math.max(0.1, parseNumber(item.width, 0.1))),
+    height: Math.max(0.1, parseNumber(item.height, 0.1)),
+    repetitions: Math.max(1, Math.round(parseNumber(item.repetitions, 1))),
+  }));
+}
+
 function expandDesigns(items) {
   return items.flatMap((item, itemIndex) => {
     const repetitions = Math.max(1, Math.round(parseNumber(item.repetitions, 1)));
@@ -49,27 +77,30 @@ function expandDesigns(items) {
   });
 }
 
-function packFilm(items, film) {
+function packFilm(items, film, spacing = MIN_SPACING_CM, margin = 0) {
   const placements = [];
-  let x = 0;
-  let y = 0;
+  const safeSpacing = Math.max(MIN_SPACING_CM, parseNumber(spacing, MIN_SPACING_CM));
+  const safeMargin = Math.max(0, parseNumber(margin, 0));
+  const filmRight = Math.max(safeMargin + 0.1, film.width - safeMargin);
+  let x = safeMargin;
+  let y = safeMargin;
   let rowHeight = 0;
   let usedLength = 0;
 
   items.forEach((item) => {
-    const width = Math.min(item.width, film.width);
+    const width = Math.min(item.width, filmRight - safeMargin);
     const height = item.height;
 
-    if (x + width > film.width) {
-      x = 0;
-      y += rowHeight;
+    if (x > safeMargin && x + width > filmRight) {
+      x = safeMargin;
+      y += rowHeight + safeSpacing;
       rowHeight = 0;
     }
 
     placements.push({ ...item, x, y, width, height });
-    x += width;
+    x += width + safeSpacing;
     rowHeight = Math.max(rowHeight, height);
-    usedLength = Math.max(usedLength, y + height);
+    usedLength = Math.max(usedLength, y + height + safeMargin);
   });
 
   return {
@@ -150,13 +181,15 @@ async function buildLayoutFile(film, layout) {
   );
 }
 
-function buildOrderDetails(customer, film, items, usedLength) {
+function buildOrderDetails(customer, film, items, usedLength, spacing, margin) {
   const itemLines = items.map((item, index) => (
     `Diseño ${index + 1}: ${item.file?.name || "sin archivo"} - ${formatMetric(item.width)} x ${formatMetric(item.height)} cm - ${item.repetitions} repeticiones`
   ));
   return [
     "Pedido generado desde calculadora DTF.",
     `Film seleccionado: ${film.label} (${film.width} cm de ancho).`,
+    `Separación entre imágenes: ${formatMetric(spacing)} cm.`,
+    `Margen del material: ${formatMetric(margin)} cm.`,
     `Largo estimado: ${formatMetric(usedLength)} cm.`,
     customer.details ? `Notas del cliente: ${customer.details}` : "",
     ...itemLines,
@@ -167,15 +200,25 @@ export default function Calculadora() {
   const [site, setSite] = useState(null);
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [filmId, setFilmId] = useState(FILM_SIZES[0].id);
+  const [customFilmWidth, setCustomFilmWidth] = useState(DEFAULT_CUSTOM_FILM_WIDTH);
+  const [spacing, setSpacing] = useState(1);
+  const [materialMargin, setMaterialMargin] = useState(0);
   const [items, setItems] = useState([createDesign()]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const canvasRef = useRef(null);
 
-  const selectedFilm = useMemo(() => FILM_SIZES.find((film) => film.id === filmId) || FILM_SIZES[0], [filmId]);
-  const expanded = useMemo(() => expandDesigns(items), [items]);
-  const layout = useMemo(() => packFilm(expanded, selectedFilm), [expanded, selectedFilm]);
+  const selectedFilm = useMemo(() => {
+    if (filmId === CUSTOM_FILM_ID) {
+      const width = Math.max(1, parseNumber(customFilmWidth, DEFAULT_CUSTOM_FILM_WIDTH));
+      return { id: CUSTOM_FILM_ID, label: `${formatMetric(width)} cm`, width, previewLength: 20 };
+    }
+    return FILM_SIZES.find((film) => film.id === filmId) || FILM_SIZES[0];
+  }, [customFilmWidth, filmId]);
+  const normalizedItems = useMemo(() => normalizeDesigns(items, selectedFilm, materialMargin), [items, materialMargin, selectedFilm]);
+  const expanded = useMemo(() => expandDesigns(normalizedItems), [normalizedItems]);
+  const layout = useMemo(() => packFilm(expanded, selectedFilm, spacing, materialMargin), [expanded, materialMargin, selectedFilm, spacing]);
+  const spacingLimit = useMemo(() => getSpacingLimit(normalizedItems, selectedFilm, materialMargin), [materialMargin, normalizedItems, selectedFilm]);
   const totalRepetitions = expanded.length;
 
   useEffect(() => {
@@ -194,26 +237,6 @@ export default function Calculadora() {
     return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const previewLength = Math.max(layout.usedLength, selectedFilm.previewLength);
-    const scale = Math.min(680 / selectedFilm.width, 1800 / previewLength);
-    canvas.width = Math.round(selectedFilm.width * scale);
-    canvas.height = Math.round(previewLength * scale) + 34;
-    canvas.style.width = "100%";
-    canvas.style.maxWidth = `${canvas.width}px`;
-
-    let cancelled = false;
-    Promise.all(layout.placements.map((item) => loadPreviewImage(item.previewUrl))).then((loadedImages) => {
-      if (!cancelled) drawFilmLayout(ctx, canvas, selectedFilm, layout, scale, loadedImages);
-    });
-    return () => { cancelled = true; };
-  }, [layout, selectedFilm]);
-
   const whatsappLink = useMemo(() => {
     const raw = site?.general?.whatsappRaw || "";
     return raw ? `https://wa.me/${raw}` : "#";
@@ -221,6 +244,26 @@ export default function Calculadora() {
 
   function updateCustomer(field, value) {
     setCustomer((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateFilmWidth(value) {
+    setFilmId(CUSTOM_FILM_ID);
+    setCustomFilmWidth(Math.max(1, parseNumber(value, DEFAULT_CUSTOM_FILM_WIDTH)));
+  }
+
+  function validateCalculator() {
+    const usableWidth = getUsableFilmWidth(selectedFilm, materialMargin);
+    const invalidWidth = items.find((item) => parseNumber(item.width, 0) > usableWidth);
+
+    if (parseNumber(selectedFilm.width, 0) <= 0) return "El ancho del film debe ser mayor a 0 cm.";
+    if (parseNumber(materialMargin, 0) < 0) return "El margen del material no puede ser negativo.";
+    if (parseNumber(materialMargin, 0) * 2 >= parseNumber(selectedFilm.width, 0)) return "El margen ocupa todo el ancho del film.";
+    if (parseNumber(spacing, 0) < MIN_SPACING_CM) return `La separación mínima es ${MIN_SPACING_CM} cm.`;
+    if (Number.isFinite(spacingLimit) && parseNumber(spacing, 0) > spacingLimit) {
+      return `La separación máxima para estas medidas es ${formatMetric(spacingLimit)} cm.`;
+    }
+    if (invalidWidth) return `Un diseño supera el ancho disponible del film (${formatMetric(usableWidth)} cm).`;
+    return "";
   }
 
   function updateItem(index, field, value) {
@@ -235,7 +278,9 @@ export default function Calculadora() {
         if (field === "repetitions") {
           return { ...item, repetitions: Math.max(1, Math.round(parseNumber(value, 1))) };
         }
-        return { ...item, [field]: Math.max(0.1, parseNumber(value, 0.1)) };
+        const nextValue = Math.max(0.1, parseNumber(value, 0.1));
+        if (field === "width") return { ...item, width: Math.min(getUsableFilmWidth(selectedFilm, materialMargin), nextValue) };
+        return { ...item, [field]: nextValue };
       })
     );
   }
@@ -273,16 +318,33 @@ export default function Calculadora() {
       return;
     }
 
+    const validationMessage = validateCalculator();
+    if (validationMessage) {
+      setError(validationMessage);
+      setLoading(false);
+      return;
+    }
+
     try {
       const payload = new FormData();
-      const details = buildOrderDetails(customer, selectedFilm, items, layout.usedLength);
+      const details = buildOrderDetails(customer, selectedFilm, normalizedItems, layout.usedLength, spacing, materialMargin);
       const extraData = {
         source: "dtf-calculator",
         film: selectedFilm,
         filmWidthCm: selectedFilm.width,
+        spacingCm: parseNumber(spacing, MIN_SPACING_CM),
+        materialMarginCm: parseNumber(materialMargin, 0),
         estimatedLengthCm: layout.usedLength,
         totalRepetitions,
-        designs: items.map((item, index) => ({
+        layout: layout.placements.map((placement) => ({
+          designIndex: placement.itemIndex + 1,
+          repetitionIndex: placement.repeatIndex + 1,
+          xCm: placement.x,
+          yCm: placement.y,
+          widthCm: placement.width,
+          heightCm: placement.height,
+        })),
+        designs: normalizedItems.map((item, index) => ({
           index: index + 1,
           fileName: item.file?.name || "",
           widthCm: parseNumber(item.width, 0),
@@ -319,6 +381,9 @@ export default function Calculadora() {
       setCustomer(EMPTY_CUSTOMER);
       clearItems();
       setFilmId(FILM_SIZES[0].id);
+      setCustomFilmWidth(DEFAULT_CUSTOM_FILM_WIDTH);
+      setSpacing(1);
+      setMaterialMargin(0);
     } catch {
       setError("No se pudo enviar el pedido DTF.");
     } finally {
@@ -372,6 +437,15 @@ export default function Calculadora() {
                   </button>
                 ))}
               </div>
+              <div className="calc-grid-top calc-film-controls">
+                <label>Ancho personalizado (cm)<input type="number" min="1" step="0.1" value={customFilmWidth} onFocus={() => setFilmId(CUSTOM_FILM_ID)} onChange={(event) => updateFilmWidth(event.target.value)} /></label>
+                <label>Separación entre imágenes (cm)<input type="number" min={MIN_SPACING_CM} max={Number.isFinite(spacingLimit) ? spacingLimit : undefined} step="0.1" value={spacing} onChange={(event) => setSpacing(Math.max(MIN_SPACING_CM, parseNumber(event.target.value, MIN_SPACING_CM)))} /></label>
+                <label>Margen del material (cm)<input type="number" min="0" step="0.1" value={materialMargin} onChange={(event) => setMaterialMargin(Math.max(0, parseNumber(event.target.value, 0)))} /></label>
+              </div>
+              <p className="hint calc-limit-hint">
+                Ancho disponible: {formatMetric(getUsableFilmWidth(selectedFilm, materialMargin))} cm
+                {Number.isFinite(spacingLimit) ? ` · separación máxima sugerida: ${formatMetric(spacingLimit)} cm` : ""}
+              </p>
             </section>
 
             <section className="calc-layout">
@@ -389,7 +463,7 @@ export default function Calculadora() {
                       </div>
                       <label>Imagen PNG<input type="file" accept="image/png" required={!item.file} onChange={(event) => updateItem(index, "file", event.target.files?.[0] || null)} /></label>
                       <div className="calc-item-fields">
-                        <label>Ancho repetición (cm)<input type="number" min="0.1" step="0.1" value={item.width} onChange={(event) => updateItem(index, "width", event.target.value)} /></label>
+                        <label>Ancho repetición (cm)<input type="number" min="0.1" max={getUsableFilmWidth(selectedFilm, materialMargin)} step="0.1" value={item.width} onChange={(event) => updateItem(index, "width", event.target.value)} /></label>
                         <label>Alto repetición (cm)<input type="number" min="0.1" step="0.1" value={item.height} onChange={(event) => updateItem(index, "height", event.target.value)} /></label>
                         <label>Repeticiones<input type="number" min="1" step="1" value={item.repetitions} onChange={(event) => updateItem(index, "repetitions", event.target.value)} /></label>
                       </div>
@@ -421,12 +495,6 @@ export default function Calculadora() {
                     <strong>Repeticiones:</strong> {totalRepetitions}
                   </div>
                 </div>
-                <div className="calc-canvas-card">
-                  <canvas ref={canvasRef}></canvas>
-                </div>
-                <div className="notice">
-                  <strong>Vista previa:</strong> muestra el film como tira continua. Solo se limita el ancho; las repeticiones siguen agregándose hacia abajo.
-                </div>
               </div>
             </section>
 
@@ -435,14 +503,21 @@ export default function Calculadora() {
                 <h3>Repeticiones cargadas</h3>
                 <span className="hint">{totalRepetitions} copias en total</span>
               </div>
-              <div className="calc-repetitions">
-                {expanded.map((item, index) => (
-                  <article className="calc-repetition-card" key={`${item.itemIndex}-${item.repeatIndex}-${index}`}>
-                    {item.previewUrl ? <img className="calc-repetition-image" src={item.previewUrl} alt={`Repetición ${index + 1}`} /> : <div className="calc-repetition-box" />}
-                    <strong>Diseño {item.itemIndex + 1}</strong>
-                    <span>{formatMetric(item.width)} x {formatMetric(item.height)} cm</span>
-                    <small>Repetición {item.repeatIndex + 1}</small>
-                  </article>
+              <div className="calc-repetitions" style={{ aspectRatio: `${selectedFilm.width} / ${Math.max(layout.usedLength, 1)}` }}>
+                {layout.placements.map((item, index) => (
+                  <article
+                    className="calc-repetition-card"
+                    key={`${item.itemIndex}-${item.repeatIndex}-${index}`}
+                    title={`Diseño ${item.itemIndex + 1}`}
+                    style={{
+                      left: `${(item.x / selectedFilm.width) * 100}%`,
+                      top: `${(item.y / layout.usedLength) * 100}%`,
+                      width: `${(item.width / selectedFilm.width) * 100}%`,
+                      height: `${(item.height / layout.usedLength) * 100}%`,
+                      background: REPEAT_COLORS[item.itemIndex % REPEAT_COLORS.length],
+                    }}
+                    aria-label={`Diseño ${item.itemIndex + 1}`}
+                  />
                 ))}
               </div>
             </section>
