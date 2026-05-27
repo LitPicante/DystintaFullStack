@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/", include("media_library.urls")),
     path("api/", include("orders.urls")),
     path("api/", include("core.urls")),
+    path("api/", include("whatsapp_admin.urls")),
 ]
 
 if settings.DEBUG:

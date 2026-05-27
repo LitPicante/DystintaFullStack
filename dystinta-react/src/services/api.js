@@ -12,9 +12,10 @@ const PUBLIC_SITE_FALLBACK = {
   general: {
     companyName: "Dystinta",
     slogan: "Impresion y personalizacion",
-    whatsappRaw: "",
-    instagram: "#",
-    facebook: "#",
+    whatsapp: "+595 982 317 317",
+    whatsappRaw: "595982317317",
+    instagram: "https://www.instagram.com/dys.tintapy/",
+    facebook: "https://www.facebook.com/sshirleybittar/",
     address: "Padre Molas c/ 1ro de mayo, Capiata, Paraguay",
     map: "https://www.google.com/maps?q=-25.356464,-57.484890&z=17&output=embed",
     themePrimary: "#8b4bff",
@@ -54,7 +55,7 @@ function canUseStorage() {
 }
 
 function normalizePublicSite(site) {
-  return {
+  const normalized = {
     ...PUBLIC_SITE_FALLBACK,
     ...(site || {}),
     general: { ...PUBLIC_SITE_FALLBACK.general, ...(site?.general || {}) },
@@ -64,6 +65,13 @@ function normalizePublicSite(site) {
     about: { ...PUBLIC_SITE_FALLBACK.about, ...(site?.about || {}) },
     catalog: Array.isArray(site?.catalog) ? site.catalog : PUBLIC_SITE_FALLBACK.catalog,
   };
+
+  normalized.general.whatsapp = "+595 982 317 317";
+  normalized.general.whatsappRaw = "595982317317";
+  normalized.general.instagram = "https://www.instagram.com/dys.tintapy/";
+  normalized.general.facebook = "https://www.facebook.com/sshirleybittar/";
+
+  return normalized;
 }
 
 function readCacheEntry(key, fallback) {

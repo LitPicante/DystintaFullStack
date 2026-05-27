@@ -6,7 +6,7 @@ export default function Footer({ companyName, whatsappLink, instagram, facebook 
           <strong className="footer-brand" data-company>{companyName}</strong>
           <p className="footer-copy">
             Centro de impresión y personalización con enfoque comercial para textiles,
-            objetos rígidos y producción visual. Datos simulados para maqueta.
+            objetos rígidos y producción visual.
           </p>
           <div className="footer-badge-row">
             <span className="home-chip">DTF Textil</span>
@@ -62,7 +62,6 @@ export default function Footer({ companyName, whatsappLink, instagram, facebook 
 
       <div className="container footer-bottom">
         <span>Copyright © Dystinta Impresión & Personalización</span>
-        <span>Home inspirado en referencia comercial, adaptado a la identidad actual.</span>
       </div>
     </footer>
   );

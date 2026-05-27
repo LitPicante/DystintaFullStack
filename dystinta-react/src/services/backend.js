@@ -99,3 +99,27 @@ export const adminToolsService = {
     return api.post("/admin/import/", data).then((response) => response.data);
   },
 };
+
+export const whatsappAdminService = {
+  listInstances() {
+    return api.get("/whatsapp-admin/instances/").then((response) => response.data);
+  },
+  createInstance(name) {
+    return api.post("/whatsapp-admin/instances/create/", { name }).then((response) => response.data);
+  },
+  fetchQr(name) {
+    return api.get(`/whatsapp-admin/instances/${encodeURIComponent(name)}/qr/`).then((response) => response.data);
+  },
+  getStatus(name) {
+    return api.get(`/whatsapp-admin/instances/${encodeURIComponent(name)}/status/`).then((response) => response.data);
+  },
+  restart(name) {
+    return api.post(`/whatsapp-admin/instances/${encodeURIComponent(name)}/restart/`).then((response) => response.data);
+  },
+  logout(name) {
+    return api.post(`/whatsapp-admin/instances/${encodeURIComponent(name)}/logout/`).then((response) => response.data);
+  },
+  remove(name) {
+    return api.delete(`/whatsapp-admin/instances/${encodeURIComponent(name)}/`);
+  },
+};

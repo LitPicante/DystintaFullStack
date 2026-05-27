@@ -25,6 +25,7 @@ function App() {
         <Route path="/contacto" element={<Contacto />} />
         <Route path="/catalogo" element={<Catalogo />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/admin/whatsapp" element={<Panel initialTab="whatsapp" />} />
         <Route path="/panel" element={<Panel />} />
         <Route path="/seguimiento/:token" element={<Seguimiento />} />
         <Route path="/quienes-somos" element={<QuienesSomos />} />

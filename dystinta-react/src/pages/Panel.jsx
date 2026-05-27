@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo-dystinta.jpg";
+import WhatsAppAdminPanel from "../components/WhatsAppAdminPanel";
 import { adminToolsService, authService, mediaService, orderService, siteService, userService } from "../services/backend";
 
 const STATUS_OPTIONS = ["Nuevo", "En revisión", "Archivo recibido", "En diseño", "Aprobación cliente", "Producción", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado"];
@@ -342,9 +343,9 @@ function BackofficeDashboard({ orders, loading }) {
   );
 }
 
-export default function Panel() {
+export default function Panel({ initialTab = "dashboard" }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [me, setMe] = useState(null);
   const [siteData, setSiteData] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -875,6 +876,7 @@ export default function Panel() {
             <button className={`tab-btn${activeTab === "orders" ? " active" : ""}`} type="button" onClick={() => setActiveTab("orders")}>Pedidos</button>
             {isAdmin ? <button className={`tab-btn${activeTab === "content" ? " active" : ""}`} type="button" onClick={() => setActiveTab("content")}>Contenido</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "catalog" ? " active" : ""}`} type="button" onClick={() => setActiveTab("catalog")}>Catálogo</button> : null}
+            {isAdmin ? <button className={`tab-btn${activeTab === "whatsapp" ? " active" : ""}`} type="button" onClick={() => setActiveTab("whatsapp")}>WhatsApp</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "users" ? " active" : ""}`} type="button" onClick={() => setActiveTab("users")}>Usuarios</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "backup" ? " active" : ""}`} type="button" onClick={() => setActiveTab("backup")}>Respaldo</button> : null}
           </div>
@@ -1109,6 +1111,8 @@ export default function Panel() {
               </div>
             </section>
           ) : null}
+
+          {isAdmin && activeTab === "whatsapp" ? <WhatsAppAdminPanel /> : null}
 
           {isAdmin && activeTab === "users" ? (
             <div className="panel-stack">

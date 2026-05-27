@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'core',
     'site_content',
     'media_library',
+    'whatsapp_admin',
 ]
 
 # =========================
