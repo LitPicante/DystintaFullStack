@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from core.media_urls import build_media_url
 from .models import (
     AboutContent,
     AboutContentCard,
@@ -66,11 +67,7 @@ class AboutContentCardSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         request = self.context.get("request")
-        if not obj.image:
-            return None
-        if request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url
+        return build_media_url(request, obj.image)
 
 
 class AboutContentSerializer(serializers.ModelSerializer):
@@ -118,11 +115,7 @@ class CatalogProductSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         request = self.context.get("request")
-        if not obj.image:
-            return None
-        if request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url
+        return build_media_url(request, obj.image)
 
 
 class PublicSiteSerializer(serializers.Serializer):

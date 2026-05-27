@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from accounts.serializers import UserSerializer
 from accounts.models import User
+from core.media_urls import build_media_url
 from .models import Order, OrderAttachment
 from .services.whatsapp_service import build_order_status_message
 
@@ -98,11 +99,7 @@ class OrderAttachmentSerializer(serializers.ModelSerializer):
 
     def get_file(self, obj):
         request = self.context.get("request")
-        if not obj.file:
-            return None
-        if request:
-            return request.build_absolute_uri(obj.file.url)
-        return obj.file.url
+        return build_media_url(request, obj.file)
 
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -151,11 +148,7 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_file(self, obj):
         request = self.context.get("request")
-        if not obj.file:
-            return None
-        if request:
-            return request.build_absolute_uri(obj.file.url)
-        return obj.file.url
+        return build_media_url(request, obj.file)
 
     def get_whatsappMessage(self, obj):
         return build_order_status_whatsapp_message(obj)
