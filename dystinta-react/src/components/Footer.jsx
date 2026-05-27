@@ -18,17 +18,16 @@ export default function Footer({ companyName, whatsappLink, instagram, facebook 
         <div>
           <h4>Contacto de atención</h4>
           <ul className="footer-list">
-            <li>Atención al cliente: +595 981 000 444</li>
-            <li>Ventas corporativas: +595 981 000 555</li>
-            <li>Correo: hola@dystinta.demo</li>
+            <li>+595 982 317 317</li>
+          
           </ul>
         </div>
 
         <div>
           <h4>Showroom</h4>
           <ul className="footer-list">
-            <li>Av. Creativa 2450</li>
-            <li>Asunción, Paraguay</li>
+            <li>Padre Molas c/ 1ro de mayo</li>
+            <li>Capiata, Paraguay</li>
             <li>Lunes a Viernes, 08:30 a 18:00</li>
           </ul>
         </div>

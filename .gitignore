@@ -1,1 +1,38 @@
+# macOS
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Django
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# ENV
+.env
+
+# Virtualenv
+venv/
+.env/
+.venv/
+
+# Node
+node_modules/
+build/
+dist/
+
+# React
+.next/
+
+# Docker volumes
+data/postgres/
+data/redis/
+
+# IDE
+.vscode/
+.idea/.DS_Store

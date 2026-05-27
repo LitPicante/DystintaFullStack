@@ -5,6 +5,10 @@ import Footer from "../components/Footer";
 import Carrusel from "../components/Carrusel";
 import usePublicSite from "../hooks/usePublicSite";
 
+const SHOWROOM_ADDRESS = "Padre Molas c/ 1ro de mayo, Capiata, Paraguay";
+const SHOWROOM_MAP_URL = "https://goo.gl/maps/hzybqn6BoBBcRtZY8?g_st=aw";
+const SHOWROOM_MAP_EMBED = "https://www.google.com/maps?q=-25.356464,-57.484890&z=17&output=embed";
+
 export default function Home() {
   const { site, error: siteError } = usePublicSite();
 
@@ -100,16 +104,8 @@ export default function Home() {
               <h3>Canales de contacto</h3>
               <ul className="directory-list">
                 <li>
-                  <strong>Ventas mayoristas</strong>
-                  <span>+595 981 000 111</span>
-                </li>
-                <li>
-                  <strong>Asesor comercial</strong>
-                  <span>+595 981 000 222</span>
-                </li>
-                <li>
-                  <strong>Seguimiento de pedidos</strong>
-                  <span>+595 981 000 333</span>
+                  <strong>Ventas</strong>
+                  <span>+595 982 317 317</span>
                 </li>
               </ul>
               <a className="btn small" data-whatsapp-link href={whatsappLink}>
@@ -120,12 +116,22 @@ export default function Home() {
             <article className="info-card directory-card">
               <span className="badge">Showroom</span>
               <h3>Visitanos con cita previa</h3>
-              <p className="lead-small">Av. Creativa 2450, Asunción, Paraguay</p>
+              <p className="lead-small">{SHOWROOM_ADDRESS}</p>
               <div className="directory-meta">
                 <span>Lunes a Viernes</span>
                 <strong>08:30 a 18:00 hs</strong>
               </div>
-              <div className="directory-map-placeholder">Mapa de referencia comercial</div>
+              <iframe
+                className="directory-map-placeholder directory-map-frame"
+                title="Mapa showroom Dystinta"
+                src={SHOWROOM_MAP_EMBED}
+                loading="lazy"
+                allowFullScreen
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+              <a className="directory-map-link" href={SHOWROOM_MAP_URL} target="_blank" rel="noreferrer">
+                Abrir ubicación en Google Maps
+              </a>
             </article>
 
             <article className="info-card directory-card">
