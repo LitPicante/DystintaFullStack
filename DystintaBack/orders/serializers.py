@@ -7,6 +7,7 @@ from accounts.serializers import UserSerializer
 from accounts.models import User
 from core.media_urls import build_media_url
 from .models import Order, OrderAttachment
+from .services.assignment_service import select_designer_for_new_order
 from .services.whatsapp_service import build_order_status_message
 
 
@@ -54,6 +55,7 @@ class FlexibleJSONField(serializers.JSONField):
 
 class OrderCreateSerializer(serializers.ModelSerializer):
     fileName = serializers.CharField(source="file_name", read_only=True)
+    orderNumber = serializers.CharField(source="order_number", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
     assignedTo = serializers.PrimaryKeyRelatedField(source="assigned_to", read_only=True)
     email = serializers.EmailField(required=False, allow_blank=True)
@@ -70,6 +72,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             "email",
             "quantity",
             "details",
+            "orderNumber",
             "file",
             "fileName",
             "status",
@@ -86,6 +89,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         validated_data.setdefault("status", Order.STATUS_NUEVO)
         validated_data.setdefault("notes", "")
         validated_data.setdefault("extra_data", {})
+        validated_data.setdefault("assigned_to", select_designer_for_new_order())
         return super().create(validated_data)
 
 
@@ -104,6 +108,7 @@ class OrderAttachmentSerializer(serializers.ModelSerializer):
 
 class OrderListSerializer(serializers.ModelSerializer):
     fileName = serializers.CharField(source="file_name", read_only=True)
+    orderNumber = serializers.CharField(source="order_number", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
     updatedAt = serializers.DateTimeField(source="updated_at", read_only=True)
     assignedTo = UserSerializer(source="assigned_to", read_only=True)
@@ -115,6 +120,10 @@ class OrderListSerializer(serializers.ModelSerializer):
     trackingEnabled = serializers.BooleanField(source="tracking_enabled", read_only=True)
     currentProgress = serializers.IntegerField(source="current_progress", read_only=True)
     statusUpdatedAt = serializers.DateTimeField(source="status_updated_at", read_only=True)
+    archivedAt = serializers.DateTimeField(source="archived_at", read_only=True)
+    archivedBy = UserSerializer(source="archived_by", read_only=True)
+    archivedReason = serializers.CharField(source="archived_reason", read_only=True)
+    isArchived = serializers.BooleanField(source="is_archived", read_only=True)
     statusMessage = serializers.SerializerMethodField()
     attachments = OrderAttachmentSerializer(many=True, read_only=True)
 
@@ -128,6 +137,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             "email",
             "quantity",
             "details",
+            "orderNumber",
             "file",
             "fileName",
             "status",
@@ -140,6 +150,10 @@ class OrderListSerializer(serializers.ModelSerializer):
             "trackingEnabled",
             "currentProgress",
             "statusUpdatedAt",
+            "archivedAt",
+            "archivedBy",
+            "archivedReason",
+            "isArchived",
             "statusMessage",
             "attachments",
             "createdAt",
@@ -165,6 +179,7 @@ class OrderDetailSerializer(OrderListSerializer):
 
 
 class OrderUpdateSerializer(serializers.ModelSerializer):
+    orderNumber = serializers.CharField(source="order_number", required=False, allow_blank=True, max_length=80)
     assignedTo = serializers.PrimaryKeyRelatedField(
         source="assigned_to",
         queryset=User.objects.filter(role=User.ROLE_DESIGNER, is_active=True),
@@ -174,7 +189,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ["status", "assignedTo", "notes"]
+        fields = ["status", "assignedTo", "notes", "orderNumber"]
 
     def validate_status(self, value):
         valid_statuses = {choice[0] for choice in Order.STATUS_CHOICES}

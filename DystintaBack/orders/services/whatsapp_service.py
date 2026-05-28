@@ -105,16 +105,38 @@ def build_order_tracking_url(order: Order) -> str:
 
 
 def build_order_status_message(order: Order) -> str:
-    template = STATUS_MESSAGE_TEMPLATES.get(
-        order.status,
-        "Hola {name}, tu pedido cambio de estado a {status}.",
-    )
+    order_number = (order.order_number or "").strip()
 
-    message = template.format(
-        name=order.name or "cliente",
-        status=order.status,
-        service=order.service,
-    )
+    if order_number:
+        designer_name = (
+            getattr(order.assigned_to, "name", "")
+            or getattr(order.assigned_to, "username", "")
+            or "nuestro equipo"
+        )
+
+        message = (
+            f"Hola {order.name or 'cliente'}, tu pedido {order_number} "
+            f"esta a cargo de {designer_name} y se encuentra en {order.status}."
+        )
+
+        if order.status == Order.STATUS_APROBACION_CLIENTE:
+            message = (
+                f"{message}\n\n"
+                "Responde:\n"
+                "1 para aprobar\n"
+                "2 para solicitar cambios."
+            )
+    else:
+        template = STATUS_MESSAGE_TEMPLATES.get(
+            order.status,
+            "Hola {name}, tu pedido cambio de estado a {status}.",
+        )
+
+        message = template.format(
+            name=order.name or "cliente",
+            status=order.status,
+            service=order.service,
+        )
 
     tracking_url = build_order_tracking_url(order)
 

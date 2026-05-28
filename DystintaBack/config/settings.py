@@ -165,6 +165,10 @@ MEDIA_PUBLIC_BASE_URL = os.getenv(
     ''
 )
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = 0
+
 # =========================
 # DEFAULT PK
 # =========================

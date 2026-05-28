@@ -31,11 +31,17 @@ export const orderService = {
   stats(params) {
     return api.get("/orders/stats/", { params }).then((response) => response.data);
   },
+  history(params) {
+    return api.get("/orders/history/", { params }).then((response) => response.data);
+  },
   create(payload, config) {
     return api.post("/orders/", payload, config).then((response) => response.data);
   },
   update(id, payload, config) {
     return api.patch(`/orders/${id}/`, payload, config).then((response) => response.data);
+  },
+  archive(id, reason = "") {
+    return api.delete(`/orders/${id}/`, { data: { reason } }).then((response) => response.data);
   },
   getTracking(token) {
     return api.get(`/orders/tracking/${token}/`).then((response) => response.data);

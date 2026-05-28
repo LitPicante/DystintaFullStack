@@ -14,6 +14,7 @@ const DEFAULT_CUSTOM_FILM_WIDTH = 100;
 const MIN_SPACING_CM = 0.5;
 const REPEAT_COLORS = ["#b88a37", "#4f9f8f", "#d95f59", "#6d7fd5", "#d68adf", "#7fa548", "#d7873f", "#578fd1"];
 const EMPTY_CUSTOMER = { name: "", phone: "", email: "", details: "" };
+const IMAGE_PREVIEW_EXTENSIONS = /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 function parseNumber(value, fallback = 0) {
   const normalized = String(value ?? "").replace(",", ".");
@@ -37,6 +38,11 @@ function createDesign(index = 0) {
     file: null,
     previewUrl: "",
   };
+}
+
+function canPreviewFile(file) {
+  if (!file) return false;
+  return String(file.type || "").startsWith("image/") || IMAGE_PREVIEW_EXTENSIONS.test(file.name || "");
 }
 
 function getUsableFilmWidth(film, margin = 0) {
@@ -273,7 +279,7 @@ export default function Calculadora() {
         if (field === "file") {
           if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
           const file = value || null;
-          return { ...item, file, previewUrl: file ? URL.createObjectURL(file) : "" };
+          return { ...item, file, previewUrl: file && canPreviewFile(file) ? URL.createObjectURL(file) : "" };
         }
         if (field === "repetitions") {
           return { ...item, repetitions: Math.max(1, Math.round(parseNumber(value, 1))) };
@@ -313,7 +319,7 @@ export default function Calculadora() {
 
     const missingImage = items.some((item) => !item.file);
     if (missingImage) {
-      setError("Cargá una imagen PNG en cada diseño antes de enviar.");
+      setError("Cargá un archivo en cada diseño antes de enviar.");
       setLoading(false);
       return;
     }
@@ -368,7 +374,7 @@ export default function Calculadora() {
         const designFile = new File(
           [item.file],
           `Diseno ${index + 1} - ${repetitions} rep - ${item.file.name}`,
-          { type: item.file.type || "image/png" }
+          { type: item.file.type || "application/octet-stream" }
         );
         payload.append("attachments", designFile);
       });
@@ -404,8 +410,8 @@ export default function Calculadora() {
             <div className="calc-hero">
               <div>
                 <span className="badge">Pedido DTF</span>
-                <h2>Armá tu pedido con imagen PNG</h2>
-                <p className="lead">Cargá tus diseños, elegí el ancho de film, indicá repeticiones y medidas. El largo se calcula automáticamente según el pedido.</p>
+                <h2>Armá tu pedido con tus archivos</h2>
+                <p className="lead">Cargá tus diseños en cualquier formato, elegí el ancho de film, indicá repeticiones y medidas. El largo se calcula automáticamente según el pedido.</p>
               </div>
               <div className="info-card">
                 <h3>Film seleccionado</h3>
@@ -461,15 +467,18 @@ export default function Calculadora() {
                         <strong>Diseño {index + 1}</strong>
                         <button className="btn soft small" type="button" onClick={() => removeItem(index)}>Eliminar</button>
                       </div>
-                      <label>Imagen PNG<input type="file" accept="image/png" required={!item.file} onChange={(event) => updateItem(index, "file", event.target.files?.[0] || null)} /></label>
+                      <label>Archivo del diseño<input type="file" required={!item.file} onChange={(event) => updateItem(index, "file", event.target.files?.[0] || null)} /></label>
                       <div className="calc-item-fields">
                         <label>Ancho repetición (cm)<input type="number" min="0.1" max={getUsableFilmWidth(selectedFilm, materialMargin)} step="0.1" value={item.width} onChange={(event) => updateItem(index, "width", event.target.value)} /></label>
                         <label>Alto repetición (cm)<input type="number" min="0.1" step="0.1" value={item.height} onChange={(event) => updateItem(index, "height", event.target.value)} /></label>
                         <label>Repeticiones<input type="number" min="1" step="1" value={item.repetitions} onChange={(event) => updateItem(index, "repetitions", event.target.value)} /></label>
                       </div>
                       <div className="calc-item-preview">
-                        {item.previewUrl ? <img className="calc-image-preview" src={item.previewUrl} alt={`Diseño ${index + 1}`} /> : <div className="calc-upload-placeholder">PNG</div>}
-                        <span className="hint">{formatMetric(item.width)} x {formatMetric(item.height)} cm · {item.repetitions} repeticiones</span>
+                        {item.previewUrl ? <img className="calc-image-preview" src={item.previewUrl} alt={`Diseño ${index + 1}`} /> : <div className="calc-upload-placeholder">{item.file ? "Archivo" : "Subir"}</div>}
+                        <span className="hint">
+                          {item.file ? `${item.file.name} · ` : ""}
+                          {formatMetric(item.width)} x {formatMetric(item.height)} cm · {item.repetitions} repeticiones
+                        </span>
                       </div>
                     </article>
                   ))}

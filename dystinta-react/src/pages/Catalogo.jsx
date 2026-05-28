@@ -15,6 +15,7 @@ function formatPrice(value) {
 export default function Catalogo() {
   const [site, setSite] = useState(null);
   const [error, setError] = useState("");
+  const [orderForms, setOrderForms] = useState({});
 
   useEffect(() => {
     let mounted = true;
@@ -40,6 +41,36 @@ export default function Catalogo() {
 
   const products = site.catalog || [];
 
+  function updateProductOrderForm(productId, field, value) {
+    setOrderForms((current) => ({
+      ...current,
+      [productId]: {
+        name: "",
+        phone: "",
+        ...(current[productId] || {}),
+        [field]: value,
+      },
+    }));
+  }
+
+  function handleProductOrder(product, event) {
+    event.preventDefault();
+    const form = orderForms[product.id] || {};
+    const raw = site?.general?.whatsappRaw || "";
+
+    if (!raw) return;
+
+    const text = [
+      "Nuevo pedido desde catalogo Dystinta",
+      `Producto: ${product.name}`,
+      `Precio: ${formatPrice(product.price)}`,
+      `Cliente: ${form.name || ""}`,
+      `Celular: ${form.phone || ""}`,
+    ].join("\n");
+
+    window.open(`https://wa.me/${raw}?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <>
       <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
@@ -57,6 +88,27 @@ export default function Catalogo() {
                     <h3>{product.name}</h3>
                     <p>{product.description}</p>
                     <strong>{formatPrice(product.price)}</strong>
+                    <form className="catalog-order-form" onSubmit={(event) => handleProductOrder(product, event)}>
+                      <label>
+                        Nombre
+                        <input
+                          required
+                          value={orderForms[product.id]?.name || ""}
+                          onChange={(event) => updateProductOrderForm(product.id, "name", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Celular
+                        <input
+                          required
+                          value={orderForms[product.id]?.phone || ""}
+                          onChange={(event) => updateProductOrderForm(product.id, "phone", event.target.value)}
+                        />
+                      </label>
+                      <button className="btn green" type="submit">
+                        Hacer pedido
+                      </button>
+                    </form>
                   </div>
                 </article>
               ))}

@@ -81,6 +81,7 @@ class Order(TimestampedModel):
     email = models.EmailField(blank=True)
     quantity = models.CharField(max_length=100, blank=True)
     details = models.TextField(blank=True)
+    order_number = models.CharField(max_length=80, blank=True)
     file = models.FileField(upload_to="orders/", null=True, blank=True)
     file_name = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_NUEVO)
@@ -97,6 +98,15 @@ class Order(TimestampedModel):
     tracking_enabled = models.BooleanField(default=False)
     current_progress = models.PositiveSmallIntegerField(default=10)
     status_updated_at = models.DateTimeField(null=True, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="archived_orders",
+    )
+    archived_reason = models.CharField(max_length=255, blank=True)
 
     @classmethod
     def progress_for_status(cls, status, previous_progress=10):
@@ -112,6 +122,10 @@ class Order(TimestampedModel):
         if not self.tracking_token:
             self.tracking_token = uuid.uuid4().hex
         self.tracking_enabled = True
+
+    @property
+    def is_archived(self):
+        return self.archived_at is not None
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None

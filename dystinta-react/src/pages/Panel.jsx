@@ -9,6 +9,12 @@ const SERVICE_OPTIONS = ["DTF Textil", "DTF UV", "Serigrafía"];
 const COMPLETED_STATUSES = ["Entregado", "Finalizado"];
 const ORDER_UPDATE_TIMEOUT_MS = 20000;
 const EMPTY_USER_FORM = { username: "", password: "", role: "designer", name: "", is_active: true };
+const EMPTY_BACKOFFICE_ORDER_FORM = { name: "", phone: "", email: "", details: "", file: null };
+const BACKOFFICE_ORDER_TABS = [
+  { key: "dtf-textil", label: "DTF Textil", service: "DTF Textil", description: "Ideal para remeras, uniformes y prendas personalizadas." },
+  { key: "dtf-uv", label: "DTF UV", service: "DTF UV", description: "Para envases, objetos rigidos, etiquetas y branding de productos." },
+  { key: "serigrafia", label: "Serigrafia", service: "Serigrafía", description: "Recomendada para volumen, campanas, eventos y tiradas grandes." },
+];
 const SITE_SECTIONS = [
   { key: "general", title: "General", endpoint: "general", fields: [
     { key: "companyName", label: "Empresa" }, { key: "slogan", label: "Slogan" },
@@ -350,6 +356,7 @@ export default function Panel({ initialTab = "dashboard" }) {
   const [siteData, setSiteData] = useState(null);
   const [orders, setOrders] = useState([]);
   const [dashboardOrders, setDashboardOrders] = useState([]);
+  const [historyOrders, setHistoryOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [designers, setDesigners] = useState([]);
   const [mediaItems, setMediaItems] = useState([]);
@@ -357,10 +364,17 @@ export default function Panel({ initialTab = "dashboard" }) {
   const [stats, setStats] = useState({ total: 0, new: 0, design: 0, done: 0 });
   const [filters, setFilters] = useState({ status: "", service: "", search: "" });
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
+  const [createOrderTab, setCreateOrderTab] = useState("dtf-textil");
+  const [createOrderForms, setCreateOrderForms] = useState({
+    "dtf-textil": { ...EMPTY_BACKOFFICE_ORDER_FORM },
+    "dtf-uv": { ...EMPTY_BACKOFFICE_ORDER_FORM },
+    serigrafia: { ...EMPTY_BACKOFFICE_ORDER_FORM },
+  });
   const [adminPassword, setAdminPassword] = useState("");
   const [importFile, setImportFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [savingOrderId, setSavingOrderId] = useState(null);
@@ -368,6 +382,7 @@ export default function Panel({ initialTab = "dashboard" }) {
   const [userActionId, setUserActionId] = useState(null);
   const [backupBusy, setBackupBusy] = useState("");
   const [mediaBusySlot, setMediaBusySlot] = useState(null);
+  const [creatingOrder, setCreatingOrder] = useState(false);
 
   const isAdmin = me?.role === "admin";
   const adminUser = users.find((user) => user.username === "admin");
@@ -394,6 +409,20 @@ export default function Panel({ initialTab = "dashboard" }) {
       setLoading(false);
     }
   }, [queryParams]);
+
+  const loadHistoryOrders = useCallback(async () => {
+    if (!isAdmin) return;
+    setHistoryLoading(true);
+    setError("");
+    try {
+      const historyData = await orderService.history();
+      setHistoryOrders(Array.isArray(historyData) ? historyData : []);
+    } catch {
+      setError("No se pudo cargar el historial de pedidos.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [isAdmin]);
 
   const loadDashboardOrders = useCallback(async () => {
     setDashboardLoading(true);
@@ -448,6 +477,7 @@ export default function Panel({ initialTab = "dashboard" }) {
 
   useEffect(() => { if (me) loadOrders(); }, [me, loadOrders]);
   useEffect(() => { if (me) loadDashboardOrders(); }, [me, loadDashboardOrders]);
+  useEffect(() => { if (me && isAdmin && activeTab === "history") loadHistoryOrders(); }, [me, isAdmin, activeTab, loadHistoryOrders]);
 
   function handleLogout() {
     const refresh = localStorage.getItem("refresh");
@@ -491,6 +521,60 @@ export default function Panel({ initialTab = "dashboard" }) {
     setOrders((current) =>
       current.map((item) => (item.id === orderId ? { ...item, [field]: value } : item))
     );
+  }
+
+  function handleCreateOrderFieldChange(tab, event) {
+    const { name, value, type, files } = event.target;
+    setCreateOrderForms((current) => ({
+      ...current,
+      [tab]: {
+        ...current[tab],
+        [name]: type === "file" ? files?.[0] || null : value,
+      },
+    }));
+  }
+
+  function resetCreateOrderForm(tab) {
+    setCreateOrderForms((current) => ({
+      ...current,
+      [tab]: { ...EMPTY_BACKOFFICE_ORDER_FORM },
+    }));
+  }
+
+  async function submitBackofficeOrder(tab, serviceName, event) {
+    event.preventDefault();
+    setCreatingOrder(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const current = createOrderForms[tab];
+      const payload = new FormData();
+      payload.append("service", serviceName);
+      payload.append("name", current.name);
+      payload.append("phone", current.phone);
+      payload.append("email", current.email);
+      payload.append("details", current.details);
+      payload.append("extraData", JSON.stringify({ source: "backoffice-create-order" }));
+
+      if (current.file) {
+        payload.append("file", current.file);
+      }
+
+      await orderService.create(payload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      resetCreateOrderForm(tab);
+      await loadOrders();
+      await loadDashboardOrders();
+      setSuccess("Pedido creado y asignado correctamente.");
+      setActiveTab("orders");
+    } catch {
+      setError("No se pudo crear el pedido.");
+    } finally {
+      setCreatingOrder(false);
+    }
   }
 
   function updateSiteField(sectionKey, fieldKey, value) {
@@ -620,6 +704,34 @@ export default function Panel({ initialTab = "dashboard" }) {
       setSuccess("Estado actualizado y notificación enviada automáticamente.");
     } catch (err) {
       setError(err?.message || "No se pudo actualizar el pedido.");
+      setSuccess("");
+    } finally {
+      setSavingOrderId(null);
+    }
+  }
+
+  async function archiveOrder(order) {
+    const reason = window.prompt(
+      `Motivo para enviar el pedido #${order.id} al historial`,
+      order.status === "Finalizado" || order.status === "Entregado" ? "Pedido terminado" : ""
+    );
+
+    if (reason === null) return;
+
+    setSavingOrderId(order.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const archived = await orderService.archive(order.id, reason);
+      setOrders((current) => current.filter((item) => item.id !== order.id));
+      setHistoryOrders((current) => [archived, ...current.filter((item) => item.id !== order.id)]);
+      await loadOrders();
+      await loadDashboardOrders();
+      if (activeTab === "history") await loadHistoryOrders();
+      setSuccess("Pedido movido al historial.");
+    } catch {
+      setError("No se pudo mover el pedido al historial.");
       setSuccess("");
     } finally {
       setSavingOrderId(null);
@@ -874,6 +986,8 @@ export default function Panel({ initialTab = "dashboard" }) {
           <div className="tabs">
             <button className={`tab-btn${activeTab === "dashboard" ? " active" : ""}`} type="button" onClick={() => setActiveTab("dashboard")}>Dashboard</button>
             <button className={`tab-btn${activeTab === "orders" ? " active" : ""}`} type="button" onClick={() => setActiveTab("orders")}>Pedidos</button>
+            <button className={`tab-btn${activeTab === "create-order" ? " active" : ""}`} type="button" onClick={() => setActiveTab("create-order")}>Crear pedido</button>
+            {isAdmin ? <button className={`tab-btn${activeTab === "history" ? " active" : ""}`} type="button" onClick={() => setActiveTab("history")}>Historial</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "content" ? " active" : ""}`} type="button" onClick={() => setActiveTab("content")}>Contenido</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "catalog" ? " active" : ""}`} type="button" onClick={() => setActiveTab("catalog")}>Catálogo</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "whatsapp" ? " active" : ""}`} type="button" onClick={() => setActiveTab("whatsapp")}>WhatsApp</button> : null}
@@ -882,6 +996,59 @@ export default function Panel({ initialTab = "dashboard" }) {
           </div>
 
           {activeTab === "dashboard" ? <BackofficeDashboard orders={dashboardOrders} loading={dashboardLoading} /> : null}
+
+          {activeTab === "create-order" ? (
+            <div className="panel-stack">
+              <section className="card panel-block">
+                <div className="panel-section-header">
+                  <div>
+                    <span className="badge">Backoffice</span>
+                    <h3>Crear pedido</h3>
+                  </div>
+                </div>
+                <div className="order-menu-bar" role="tablist" aria-label="Tipos de pedidos">
+                  {BACKOFFICE_ORDER_TABS.map((tab) => (
+                    <button
+                      className={`order-tab${createOrderTab === tab.key ? " active" : ""}`}
+                      type="button"
+                      key={tab.key}
+                      onClick={() => setCreateOrderTab(tab.key)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <div className="order-panels">
+                {BACKOFFICE_ORDER_TABS.map((tab) => {
+                  const form = createOrderForms[tab.key];
+                  return (
+                    <section className={`order-panel${createOrderTab === tab.key ? " active" : ""}`} key={tab.key}>
+                      <div className="panel-header">
+                        <span className="badge">Pedido</span>
+                        <h3>{tab.label}</h3>
+                        <p>{tab.description}</p>
+                      </div>
+                      <form className="order-form order-layout" onSubmit={(event) => submitBackofficeOrder(tab.key, tab.service, event)}>
+                        <div className="form-row">
+                          <label>Nombre<input name="name" required value={form.name} onChange={(event) => handleCreateOrderFieldChange(tab.key, event)} /></label>
+                          <label>Teléfono<input name="phone" required value={form.phone} onChange={(event) => handleCreateOrderFieldChange(tab.key, event)} /></label>
+                        </div>
+                        <label>Email <span className="hint">(opcional)</span><input type="email" name="email" value={form.email} onChange={(event) => handleCreateOrderFieldChange(tab.key, event)} /></label>
+                        <label>Detalles<textarea name="details" placeholder="Indicá colores, ubicación, fechas, medidas y cualquier referencia útil." value={form.details} onChange={(event) => handleCreateOrderFieldChange(tab.key, event)} /></label>
+                        <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleCreateOrderFieldChange(tab.key, event)} /></label>
+                        <div className="order-actions">
+                          <button className="btn soft" type="button" onClick={() => resetCreateOrderForm(tab.key)} disabled={creatingOrder}>Limpiar</button>
+                          <button className="btn" type="submit" disabled={creatingOrder}>{creatingOrder ? "Guardando..." : "Crear pedido"}</button>
+                        </div>
+                      </form>
+                    </section>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {activeTab === "orders" ? (
             <>
@@ -919,16 +1086,24 @@ export default function Panel({ initialTab = "dashboard" }) {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Progreso</th><th>Diseñador</th><th>Notas</th><th>Acciones</th>
+                      <th>Fecha</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Progreso</th><th>Diseñador</th><th>Notas</th><th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody id="ordersBody">
                     {loading ? (
-                      <tr><td colSpan="9">Cargando pedidos...</td></tr>
+                      <tr><td colSpan="10">Cargando pedidos...</td></tr>
                     ) : orders.length ? (
                       orders.map((order) => (
                         <tr key={order.id}>
                           <td>{order.createdAt ? new Date(order.createdAt).toLocaleString() : ""}</td>
+                          <td>
+                            <input
+                              value={order.orderNumber || ""}
+                              onChange={(event) => handleOrderFieldChange(order.id, "orderNumber", event.target.value)}
+                              placeholder="Ej: 12"
+                              disabled={savingOrderId === order.id}
+                            />
+                          </td>
                           <td><strong>{order.name}</strong><br /><span className="hint">{order.phone}</span></td>
                           <td>
                             {order.service}<br />
@@ -991,26 +1166,101 @@ export default function Panel({ initialTab = "dashboard" }) {
                                     status: order.status,
                                     assignedTo: order.assignedTo?.id || null,
                                     notes: order.notes || "",
+                                    orderNumber: order.orderNumber || "",
                                   })
                                 }
                                 disabled={savingOrderId === order.id}
                               >
-                                {savingOrderId === order.id ? "Guardando..." : "Actualizar estado"}
+                                {savingOrderId === order.id ? "Guardando..." : "Guardar pedido"}
                               </button>
                               <button className="btn soft small" type="button" onClick={() => handleCopyTrackingLink(order)}>
                                 Copiar seguimiento
                               </button>
+                              {isAdmin ? (
+                                <button
+                                  className="btn soft small"
+                                  type="button"
+                                  onClick={() => archiveOrder(order)}
+                                  disabled={savingOrderId === order.id}
+                                >
+                                  Enviar a historial
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan="9">No hay pedidos aún.</td></tr>
+                      <tr><td colSpan="10">No hay pedidos aún.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </>
+          ) : null}
+
+          {isAdmin && activeTab === "history" ? (
+            <div className="panel-stack">
+              <section className="card panel-block">
+                <div className="panel-section-header">
+                  <div>
+                    <span className="badge">Historial</span>
+                    <h3>Pedidos archivados</h3>
+                  </div>
+                  <button className="btn soft small" type="button" onClick={loadHistoryOrders} disabled={historyLoading}>
+                    {historyLoading ? "Actualizando..." : "Actualizar historial"}
+                  </button>
+                </div>
+                <p className="hint">Los pedidos enviados al historial dejan de aparecer en Pedidos, pero se conservan con sus archivos, diseñador y estado.</p>
+              </section>
+
+              <section className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Archivado</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Diseñador</th><th>Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyLoading ? (
+                      <tr><td colSpan="8">Cargando historial...</td></tr>
+                    ) : historyOrders.length ? (
+                      historyOrders.map((order) => (
+                        <tr key={order.id}>
+                          <td>
+                            {order.archivedAt ? new Date(order.archivedAt).toLocaleString() : "-"}
+                            <br />
+                            <span className="hint">{order.archivedBy?.name || order.archivedBy?.username || ""}</span>
+                          </td>
+                          <td>{order.orderNumber || "-"}</td>
+                          <td><strong>{order.name}</strong><br /><span className="hint">{order.phone}</span></td>
+                          <td>{order.service}<br /><span className="hint">{order.quantity || ""}</span></td>
+                          <td>
+                            <div className="order-file-list">
+                              {order.file ? <a href={order.file} target="_blank" rel="noreferrer">{order.fileName || "Archivo principal"}</a> : order.fileName || "Sin archivo"}
+                              {Array.isArray(order.attachments) && order.attachments.length ? (
+                                <div className="order-attachment-list">
+                                  {order.attachments.map((attachment, attachmentIndex) => (
+                                    <a href={attachment.file} target="_blank" rel="noreferrer" key={attachment.id || attachment.file}>
+                                      {(attachment.originalName || "").startsWith("Armado DTF") ? "Armado" : `Adjunto ${attachmentIndex + 1}`}: {attachment.originalName || "Ver imagen"}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td><span className={`status ${statusClass(order.status)}`}>{order.status}</span></td>
+                          <td>{order.assignedTo?.name || "Sin asignar"}</td>
+                          <td>{order.archivedReason || "-"}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr><td colSpan="8">Todavía no hay pedidos en historial.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </section>
+            </div>
           ) : null}
 
           {isAdmin && activeTab === "content" ? (

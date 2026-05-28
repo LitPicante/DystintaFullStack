@@ -1,5 +1,6 @@
 from django.db.models import Q
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.generics import RetrieveAPIView
@@ -7,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from core.permissions import IsAdminOrDesigner
+from core.permissions import IsAdmin, IsAdminOrDesigner
 from .models import Order, OrderAttachment
 from .serializers import (
     OrderCreateSerializer,
@@ -22,16 +23,23 @@ from .services.whatsapp_service import process_evolution_webhook, send_order_sta
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.select_related("assigned_to").prefetch_related("attachments").all().order_by("-created_at")
-    http_method_names = ["get", "post", "patch"]
+    http_method_names = ["get", "post", "patch", "delete"]
 
     def get_permissions(self):
         if self.action == "create":
             return [AllowAny()]
+        if self.action in {"destroy", "history"}:
+            return [IsAdmin()]
         return [IsAdminOrDesigner()]
 
     def get_queryset(self):
         queryset = Order.objects.select_related("assigned_to").prefetch_related("attachments").all().order_by("-created_at")
         user = self.request.user
+
+        if self.action == "history":
+            queryset = queryset.filter(archived_at__isnull=False).order_by("-archived_at", "-updated_at")
+        else:
+            queryset = queryset.filter(archived_at__isnull=True)
 
         if user.is_authenticated and user.role == "designer":
             queryset = queryset.filter(Q(assigned_to__isnull=True) | Q(assigned_to=user))
@@ -53,6 +61,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=search)
                 | Q(phone__icontains=search)
                 | Q(email__icontains=search)
+                | Q(order_number__icontains=search)
                 | Q(details__icontains=search)
                 | Q(file_name__icontains=search)
             )
@@ -78,7 +87,15 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
-            order = serializer.save()
+            save_kwargs = {}
+            if (
+                request.user
+                and request.user.is_authenticated
+                and getattr(request.user, "role", "") == "designer"
+            ):
+                save_kwargs["assigned_to"] = request.user
+
+            order = serializer.save(**save_kwargs)
             for uploaded_file in request.FILES.getlist("attachments"):
                 OrderAttachment.objects.create(
                     order=order,
@@ -92,12 +109,23 @@ class OrderViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
         previous_status = instance.status
+        previous_order_number = instance.order_number
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             order = serializer.save()
-            if previous_status != order.status:
+            if previous_status != order.status or previous_order_number != order.order_number:
                 send_order_status_message_on_commit(order)
+        output = OrderDetailSerializer(instance, context={"request": request})
+        return Response(output.data, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        reason = str(request.data.get("reason", "") or "").strip() if isinstance(request.data, dict) else ""
+        instance.archived_at = timezone.now()
+        instance.archived_by = request.user if request.user.is_authenticated else None
+        instance.archived_reason = reason[:255]
+        instance.save(update_fields=["archived_at", "archived_by", "archived_reason", "updated_at"])
         output = OrderDetailSerializer(instance, context={"request": request})
         return Response(output.data, status=status.HTTP_200_OK)
 
@@ -111,6 +139,11 @@ class OrderViewSet(viewsets.ModelViewSet):
             "done": queryset.filter(status__in=[Order.STATUS_ENTREGADO, Order.STATUS_FINALIZADO]).count(),
         }
         serializer = OrderStatsSerializer(data)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="history")
+    def history(self, request):
+        serializer = OrderListSerializer(self.get_queryset(), many=True, context={"request": request})
         return Response(serializer.data)
 
 

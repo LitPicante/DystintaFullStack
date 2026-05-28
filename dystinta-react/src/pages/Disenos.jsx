@@ -9,6 +9,9 @@ const FONT_SIZE_MAP = {
   Grande: "2rem",
 };
 
+const CM_TO_PX = 18;
+const MIN_LAYER_CM = 1;
+
 const EMPTY_ORDER_FORM = {
   name: "",
   phone: "",
@@ -96,28 +99,29 @@ export default function Disenos() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [sendingOrder, setSendingOrder] = useState(false);
-  const [activeTool, setActiveTool] = useState("texto");
-  const [designText, setDesignText] = useState("DYSTINTA");
+  const [activeTool, setActiveTool] = useState("capas");
+  const [canvasSize, setCanvasSize] = useState({ width: 30, height: 40 });
+  const [imageLayers, setImageLayers] = useState([]);
+  const [selectedLayerId, setSelectedLayerId] = useState(null);
+  const [designText, setDesignText] = useState("");
   const [textSize, setTextSize] = useState("Mediano");
   const [selectedColor, setSelectedColor] = useState("#8b4bff");
   const [shapeType, setShapeType] = useState("circle");
   const [uploadedImageFile, setUploadedImageFile] = useState(null);
   const [originalImageSrc, setOriginalImageSrc] = useState("");
   const [previewImageSrc, setPreviewImageSrc] = useState("");
-  const [imageScale, setImageScale] = useState(1);
-  const [showText, setShowText] = useState(true);
-  const [showShape, setShowShape] = useState(true);
-  const [showShirt, setShowShirt] = useState(true);
+  const [showText, setShowText] = useState(false);
+  const [showShape, setShowShape] = useState(false);
+  const [showShirt, setShowShirt] = useState(false);
   const [orderForm, setOrderForm] = useState(EMPTY_ORDER_FORM);
 
   const canvasRef = useRef(null);
   const previewTextRef = useRef(null);
   const previewShapeRef = useRef(null);
-  const previewImageRef = useRef(null);
+  const layerInteractionRef = useRef(null);
 
   useDraggable(previewTextRef, canvasRef, { x: 0, y: -8 });
   useDraggable(previewShapeRef, canvasRef, { x: 0, y: 38 });
-  useDraggable(previewImageRef, canvasRef, { x: 0, y: 0 });
 
   useEffect(() => {
     let mounted = true;
@@ -138,11 +142,75 @@ export default function Disenos() {
   }, []);
 
   useEffect(() => {
-    const image = previewImageRef.current;
-    if (!image) return;
-    const baseSize = 160;
-    image.style.width = `${Math.round(baseSize * imageScale)}px`;
-  }, [imageScale, previewImageSrc]);
+    const onPointerMove = (event) => {
+      const interaction = layerInteractionRef.current;
+      if (!interaction || interaction.pointerId !== event.pointerId) return;
+      const dxCm = (event.clientX - interaction.startClientX) / CM_TO_PX;
+      const dyCm = (event.clientY - interaction.startClientY) / CM_TO_PX;
+
+      setImageLayers((current) => current.map((layer) => {
+        if (layer.id !== interaction.layerId || layer.locked) return layer;
+        if (interaction.type === "move") {
+          return {
+            ...layer,
+            xCm: roundCm(clamp(interaction.startLayer.xCm + dxCm, 0, canvasSize.width - layer.widthCm)),
+            yCm: roundCm(clamp(interaction.startLayer.yCm + dyCm, 0, canvasSize.height - layer.heightCm)),
+          };
+        }
+
+        let nextX = interaction.startLayer.xCm;
+        let nextY = interaction.startLayer.yCm;
+        let nextWidth = interaction.startLayer.widthCm;
+        let nextHeight = interaction.startLayer.heightCm;
+
+        if (interaction.handle.includes("e")) {
+          nextWidth = clamp(interaction.startLayer.widthCm + dxCm, MIN_LAYER_CM, canvasSize.width - nextX);
+        }
+        if (interaction.handle.includes("s")) {
+          nextHeight = clamp(interaction.startLayer.heightCm + dyCm, MIN_LAYER_CM, canvasSize.height - nextY);
+        }
+        if (interaction.handle.includes("w")) {
+          const clampedDx = clamp(dxCm, -interaction.startLayer.xCm, interaction.startLayer.widthCm - MIN_LAYER_CM);
+          nextX = interaction.startLayer.xCm + clampedDx;
+          nextWidth = interaction.startLayer.widthCm - clampedDx;
+        }
+        if (interaction.handle.includes("n")) {
+          const clampedDy = clamp(dyCm, -interaction.startLayer.yCm, interaction.startLayer.heightCm - MIN_LAYER_CM);
+          nextY = interaction.startLayer.yCm + clampedDy;
+          nextHeight = interaction.startLayer.heightCm - clampedDy;
+        }
+
+        return {
+          ...layer,
+          xCm: roundCm(nextX),
+          yCm: roundCm(nextY),
+          widthCm: roundCm(nextWidth),
+          heightCm: roundCm(nextHeight),
+        };
+      }));
+    };
+
+    const onPointerUp = (event) => {
+      const interaction = layerInteractionRef.current;
+      if (!interaction || interaction.pointerId !== event.pointerId) return;
+      layerInteractionRef.current = null;
+      document.body.classList.remove("canvas-layer-resizing");
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [canvasSize.height, canvasSize.width]);
+
+  const canvasPixelSize = useMemo(() => ({
+    width: canvasSize.width * CM_TO_PX,
+    height: canvasSize.height * CM_TO_PX,
+  }), [canvasSize.height, canvasSize.width]);
 
   const whatsappLink = useMemo(() => {
     const raw = site?.general?.whatsappRaw || "";
@@ -193,19 +261,12 @@ export default function Disenos() {
   function handleImageUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const isPng = file.type === "image/png" || file.name.toLowerCase().endsWith(".png");
-    if (!isPng) {
-      event.target.value = "";
-      alert("Solo se permiten imágenes PNG para el mockup.");
-      return;
-    }
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result || "");
       setUploadedImageFile(file);
       setOriginalImageSrc(result);
       setPreviewImageSrc(result);
-      setImageScale(1);
     };
     reader.readAsDataURL(file);
   }
@@ -218,7 +279,6 @@ export default function Disenos() {
     try {
       const processed = await removeBackgroundFromImage(previewImageSrc || originalImageSrc);
       setPreviewImageSrc(processed);
-      setImageScale(1);
     } catch {
       alert("No se pudo quitar el fondo automáticamente.");
     }
@@ -234,6 +294,146 @@ export default function Disenos() {
 
   function updateOrderForm(field, value) {
     setOrderForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateCanvasSize(field, value) {
+    const nextValue = clamp(Number(value) || 1, 1, 300);
+    setCanvasSize((current) => ({ ...current, [field]: nextValue }));
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function roundCm(value) {
+    return Math.round(value * 10) / 10;
+  }
+
+  function formatCm(value) {
+    return roundCm(value).toLocaleString("es-PY", { maximumFractionDigits: 1 });
+  }
+
+  function buildImageLayer(file, src, offset = 0) {
+    const maxWidth = Math.max(MIN_LAYER_CM, canvasSize.width - 1);
+    const maxHeight = Math.max(MIN_LAYER_CM, canvasSize.height - 1);
+    const widthCm = Math.min(10, maxWidth);
+    const heightCm = Math.min(10, maxHeight);
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: file?.name || "imagen-lienzo.png",
+      file,
+      src,
+      xCm: roundCm(clamp(1 + offset, 0, canvasSize.width - widthCm)),
+      yCm: roundCm(clamp(1 + offset, 0, canvasSize.height - heightCm)),
+      widthCm,
+      heightCm,
+      locked: false,
+    };
+  }
+
+  function handleCanvasImageUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    files.forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        setImageLayers((current) => {
+          const layer = buildImageLayer(file, result, current.length + index);
+          setSelectedLayerId(layer.id);
+          return [...current, layer];
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+    event.target.value = "";
+  }
+
+  function addProcessedImageToCanvas() {
+    if (!previewImageSrc) {
+      alert("Primero cargá o procesá una imagen.");
+      return;
+    }
+    const file = previewImageSrc.startsWith("data:")
+      ? dataUrlToFile(previewImageSrc, uploadedImageFile?.name || "imagen-lienzo.png")
+      : uploadedImageFile;
+    const layer = buildImageLayer(file, previewImageSrc, imageLayers.length);
+    setImageLayers((current) => [...current, layer]);
+    setSelectedLayerId(layer.id);
+    setActiveTool("capas");
+  }
+
+  function startLayerMove(event, layer) {
+    if (event.target.closest(".canvas-layer-toolbar") || event.target.closest(".resize-handle")) return;
+    setSelectedLayerId(layer.id);
+    if (layer.locked) return;
+    event.preventDefault();
+    layerInteractionRef.current = {
+      type: "move",
+      pointerId: event.pointerId,
+      layerId: layer.id,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startLayer: layer,
+    };
+  }
+
+  function startLayerResize(event, layer, handle) {
+    if (layer.locked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedLayerId(layer.id);
+    document.body.classList.add("canvas-layer-resizing");
+    layerInteractionRef.current = {
+      type: "resize",
+      handle,
+      pointerId: event.pointerId,
+      layerId: layer.id,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startLayer: layer,
+    };
+  }
+
+  function toggleLayerLock(id) {
+    setImageLayers((current) => current.map((layer) => (
+      layer.id === id ? { ...layer, locked: !layer.locked } : layer
+    )));
+  }
+
+  function duplicateLayer(id) {
+    setImageLayers((current) => {
+      const source = current.find((layer) => layer.id === id);
+      if (!source) return current;
+      const copy = {
+        ...source,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: `${source.name} copia`,
+        xCm: roundCm(clamp(source.xCm + 1, 0, canvasSize.width - source.widthCm)),
+        yCm: roundCm(clamp(source.yCm + 1, 0, canvasSize.height - source.heightCm)),
+        locked: false,
+      };
+      setSelectedLayerId(copy.id);
+      return [...current, copy];
+    });
+  }
+
+  function deleteLayer(id) {
+    setImageLayers((current) => current.filter((layer) => layer.id !== id));
+    setSelectedLayerId((current) => (current === id ? null : current));
+  }
+
+  function addShirtMockup() {
+    setShowShirt(true);
+  }
+
+  function addTextLayer() {
+    setShowText(true);
+    setDesignText((current) => current || "Texto");
+  }
+
+  function addShapeLayer() {
+    setShowShape(true);
   }
 
   function dataUrlToFile(dataUrl, filename) {
@@ -261,9 +461,9 @@ export default function Disenos() {
         `Tamaño de texto: ${textSize}.`,
         `Color seleccionado: ${selectedColor}.`,
         `Figura: ${showShape ? shapeType : "oculta"}.`,
-        `Imagen PNG: ${previewImageSrc ? "cargada" : "sin imagen"}.`,
+        `Imágenes en lienzo: ${imageLayers.length}.`,
         `Remera de fondo: ${showShirt ? "visible" : "eliminada/oculta"}.`,
-        `Escala de imagen: ${imageScale}.`,
+        `Lienzo: ${canvasSize.width} x ${canvasSize.height} cm.`,
         orderForm.notes ? `Notas del cliente: ${orderForm.notes}` : "",
       ].filter(Boolean).join("\n");
       const extraData = {
@@ -271,7 +471,15 @@ export default function Disenos() {
         text: { value: designText, size: textSize, visible: showText },
         color: selectedColor,
         shape: { type: shapeType, visible: showShape },
-        image: { hasImage: Boolean(previewImageSrc), scale: imageScale },
+        canvas: { ...canvasSize, unit: "cm" },
+        imageLayers: imageLayers.map((layer) => ({
+          name: layer.name,
+          xCm: layer.xCm,
+          yCm: layer.yCm,
+          widthCm: layer.widthCm,
+          heightCm: layer.heightCm,
+          locked: layer.locked,
+        })),
         mockup: { shirtVisible: showShirt },
       };
 
@@ -283,15 +491,11 @@ export default function Disenos() {
       payload.append("details", details);
       payload.append("extraData", JSON.stringify(extraData));
 
-      if (previewImageSrc) {
-        const file = previewImageSrc.startsWith("data:")
-          ? dataUrlToFile(previewImageSrc, uploadedImageFile?.name || "mockup-diseno.png")
-          : uploadedImageFile;
-        if (file) {
-          payload.append("file", file);
-          payload.append("attachments", file);
-        }
-      }
+      imageLayers.forEach((layer, index) => {
+        if (!layer.file) return;
+        if (index === 0) payload.append("file", layer.file);
+        payload.append("attachments", layer.file);
+      });
 
       await api.post("/orders/", payload, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -323,11 +527,9 @@ export default function Disenos() {
           <div className="design-workspace">
             <aside className="tool-sidebar">
               <h3>Herramientas</h3>
-              <button className={`tool-btn${activeTool === "texto" ? " active" : ""}`} type="button" onClick={() => setActiveTool("texto")}>Texto</button>
-              <button className={`tool-btn${activeTool === "colores" ? " active" : ""}`} type="button" onClick={() => setActiveTool("colores")}>Colores</button>
-              <button className={`tool-btn${activeTool === "figuras" ? " active" : ""}`} type="button" onClick={() => setActiveTool("figuras")}>Figuras</button>
-              <button className={`tool-btn${activeTool === "fondo" ? " active" : ""}`} type="button" onClick={() => setActiveTool("fondo")}>Quitar fondos</button>
               <button className={`tool-btn${activeTool === "capas" ? " active" : ""}`} type="button" onClick={() => setActiveTool("capas")}>Capas y mockup</button>
+              <button className={`tool-btn${activeTool === "fondo" ? " active" : ""}`} type="button" onClick={() => setActiveTool("fondo")}>Quita fondos</button>
+              <button className={`tool-btn${activeTool === "remera" ? " active" : ""}`} type="button" onClick={() => setActiveTool("remera")}>Diseñar remera</button>
             </aside>
 
             <div className="design-stage-wrap">
@@ -337,22 +539,62 @@ export default function Disenos() {
                     <span className="badge">Vista previa</span>
                     <span className="hint">Simulación visual para el cliente</span>
                   </div>
-                  <div className="design-canvas" ref={canvasRef}>
+                  <div
+                    className="design-canvas"
+                    ref={canvasRef}
+                    onPointerDown={(event) => {
+                      if (event.target === event.currentTarget) setSelectedLayerId(null);
+                    }}
+                    style={{
+                      width: `${canvasPixelSize.width}px`,
+                      height: `${canvasPixelSize.height}px`,
+                    }}
+                  >
                     {showShirt ? <div className="canvas-shirt"></div> : null}
-                    <img
-                      id="designPreviewImage"
-                      ref={previewImageRef}
-                      className={`canvas-upload${previewImageSrc ? "" : " hidden"}`}
-                      alt="Diseño cargado"
-                      src={previewImageSrc || ""}
-                    />
+                    {imageLayers.map((layer) => {
+                      const selected = selectedLayerId === layer.id;
+                      return (
+                        <div
+                          key={layer.id}
+                          className={`canvas-image-layer${selected ? " selected" : ""}${layer.locked ? " locked" : ""}`}
+                          onPointerDown={(event) => startLayerMove(event, layer)}
+                          style={{
+                            left: `${layer.xCm * CM_TO_PX}px`,
+                            top: `${layer.yCm * CM_TO_PX}px`,
+                            width: `${layer.widthCm * CM_TO_PX}px`,
+                            height: `${layer.heightCm * CM_TO_PX}px`,
+                          }}
+                        >
+                          <img alt={layer.name} src={layer.src} />
+                          {selected ? (
+                            <>
+                              <div className="canvas-layer-toolbar">
+                                <button type="button" title={layer.locked ? "Desbloquear posición" : "Bloquear posición"} onClick={() => toggleLayerLock(layer.id)}>{layer.locked ? "Abrir" : "Candado"}</button>
+                                <button type="button" title="Duplicar imagen" onClick={() => duplicateLayer(layer.id)}>+</button>
+                                <button type="button" title="Eliminar imagen" onClick={() => deleteLayer(layer.id)}>Eliminar</button>
+                              </div>
+                              <span className="canvas-layer-size">{formatCm(layer.widthCm)} x {formatCm(layer.heightCm)} cm</span>
+                              {!layer.locked ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"].map((handle) => (
+                                <button
+                                  key={handle}
+                                  className={`resize-handle ${handle}`}
+                                  type="button"
+                                  aria-label={`Redimensionar ${handle}`}
+                                  onPointerDown={(event) => startLayerResize(event, layer, handle)}
+                                />
+                              )) : null}
+                            </>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                     <div
                       id="designPreviewText"
                       ref={previewTextRef}
                       className={`canvas-text${showText ? "" : " hidden"}`}
                       style={{ color: selectedColor, fontSize: FONT_SIZE_MAP[textSize] || "1.4rem" }}
                     >
-                      {designText || "DYSTINTA"}
+                      {designText}
                     </div>
                     <div
                       id="designPreviewShape"
@@ -364,52 +606,64 @@ export default function Disenos() {
                 </div>
 
                 <div className="design-controls">
-                  <section className={`tool-panel${activeTool === "texto" ? " active" : ""}`} id="tool-texto">
-                    <h3>Texto</h3>
-                    <div className="form-row">
-                      <label>Texto principal<input id="designTextInput" value={designText} onChange={(e) => setDesignText(e.target.value)} /></label>
-                      <label>Tamaño<select id="designTextSize" value={textSize} onChange={(e) => setTextSize(e.target.value)}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
-                    </div>
-                    <label>Tipografía<select><option>Sans</option><option>Bold</option><option>Script</option></select></label>
-                  </section>
-
-                  <section className={`tool-panel${activeTool === "colores" ? " active" : ""}`} id="tool-colores">
-                    <h3>Colores</h3>
-                    <div className="palette-block"><strong>Paleta vibrante</strong><div className="color-palette">{["#8b4bff", "#6a2db8", "#35d07f", "#ffcc66", "#0b0613"].map((color) => <button key={color} className={`color-chip${selectedColor === color ? " active" : ""}`} style={{ "--chip-color": color }} title={color} type="button" onClick={() => setSelectedColor(color)}></button>)}</div></div>
-                    <div className="palette-block"><strong>Paleta pastel</strong><div className="color-palette">{["#f7b2d9", "#ffd8a8", "#c7f9cc", "#a9def9", "#d0bfff"].map((color) => <button key={color} className={`color-chip${selectedColor === color ? " active" : ""}`} style={{ "--chip-color": color }} title={color} type="button" onClick={() => setSelectedColor(color)}></button>)}</div></div>
-                    <div className="palette-block"><strong>Paleta industrial</strong><div className="color-palette">{["#111827", "#374151", "#ef4444", "#0ea5e9", "#f97316"].map((color) => <button key={color} className={`color-chip${selectedColor === color ? " active" : ""}`} style={{ "--chip-color": color }} title={color} type="button" onClick={() => setSelectedColor(color)}></button>)}</div></div>
-                    <p className="hint">Elegí una paleta base para piezas textiles, UV o serigrafía.</p>
-                  </section>
-
-                  <section className={`tool-panel${activeTool === "figuras" ? " active" : ""}`} id="tool-figuras">
-                    <h3>Figuras</h3>
-                    <div className="shape-grid">
-                      <button className={`shape-btn${shapeType === "circle" ? " active" : ""}`} type="button" onClick={() => setShapeType("circle")}>Círculo</button>
-                      <button className={`shape-btn${shapeType === "square" ? " active" : ""}`} type="button" onClick={() => setShapeType("square")}>Cuadrado</button>
-                      <button className={`shape-btn${shapeType === "pill" ? " active" : ""}`} type="button" onClick={() => setShapeType("pill")}>Píldora</button>
-                    </div>
-                    <p className="hint">Usá figuras base para destacados, fondos o marcas rápidas.</p>
-                  </section>
-
                   <section className={`tool-panel${activeTool === "fondo" ? " active" : ""}`} id="tool-fondo">
                     <h3>Quitar fondos</h3>
-                    <label>Subir imagen PNG<input id="designImageInput" type="file" accept=".png,image/png" onChange={handleImageUpload} /></label>
+                    <label>Subir imagen<input id="designImageInput" type="file" accept="image/*" onChange={handleImageUpload} /></label>
                     <div className="form-row"><button className="btn" id="designRemoveBgBtn" type="button" onClick={handleRemoveBackground}>Quitar fondo</button><button className="btn soft" id="designResetImageBtn" type="button" onClick={() => setPreviewImageSrc(originalImageSrc || "")}>Restablecer imagen</button></div>
-                    <div className="form-row"><button className="btn soft" id="designImageSmallerBtn" type="button" onClick={() => setImageScale((prev) => Math.max(0.4, Number((prev - 0.1).toFixed(2))))}>Achicar imagen</button><button className="btn soft" id="designImageBiggerBtn" type="button" onClick={() => setImageScale((prev) => Math.min(3, Number((prev + 0.1).toFixed(2))))}>Agrandar imagen</button></div>
-                    <div className="info-card"><strong>Flujo sugerido</strong><p>1. Cargar imagen PNG del cliente<br />2. Limpiar fondo por transparencia/color dominante<br />3. Revisar preview<br />4. Aprobar antes de producción</p></div>
-                    <p className="hint">La carga obliga PNG para preservar transparencias y facilitar la limpieza.</p>
+                    {previewImageSrc ? <img className="background-preview" alt="Preview sin fondo" src={previewImageSrc} /> : null}
+                    <button className="btn soft" type="button" onClick={addProcessedImageToCanvas}>Agregar al lienzo</button>
+                    <div className="info-card"><strong>Flujo sugerido</strong><p>1. Cargar imagen del cliente<br />2. Limpiar fondo por transparencia/color dominante<br />3. Agregar al lienzo<br />4. Ajustar tamaño y posición</p></div>
+                    <p className="hint">El resultado se puede sumar como una capa editable dentro de la hoja de trabajo.</p>
                   </section>
 
                   <section className={`tool-panel${activeTool === "capas" ? " active" : ""}`} id="tool-capas">
                     <h3>Capas y mockup</h3>
-                    <div className="info-card"><strong>Capas recomendadas</strong><p>Fondo, figura base, texto, logo y guía de corte. Esto ayuda a ordenar los diseños antes de pasarlos a impresión.</p></div>
-                    <div className="mockup-toggle-list">
-                      <label className="mockup-toggle"><input id="toggleDesignShirt" type="checkbox" checked={showShirt} onChange={(e) => setShowShirt(e.target.checked)} /> Mostrar remera de fondo</label>
-                      <label className="mockup-toggle"><input id="toggleDesignText" type="checkbox" checked={showText} onChange={(e) => setShowText(e.target.checked)} /> Mostrar texto en la remera</label>
-                      <label className="mockup-toggle"><input id="toggleDesignShape" type="checkbox" checked={showShape} onChange={(e) => setShowShape(e.target.checked)} /> Mostrar figura en la remera</label>
+                    <div className="form-row">
+                      <label>Ancho del lienzo (cm)<input type="number" min="1" max="300" step="0.5" value={canvasSize.width} onChange={(event) => updateCanvasSize("width", event.target.value)} /></label>
+                      <label>Alto del lienzo (cm)<input type="number" min="1" max="300" step="0.5" value={canvasSize.height} onChange={(event) => updateCanvasSize("height", event.target.value)} /></label>
                     </div>
-                    <button className="btn soft" type="button" onClick={() => setShowShirt(false)}>Eliminar remera de fondo</button>
-                    <p className="hint">La imagen cargada se coloca sobre la prenda del mockup para visualizar tamaño y contraste.</p>
+                    <label>Agregar imágenes al lienzo<input type="file" accept="image/*" multiple onChange={handleCanvasImageUpload} /></label>
+                    <div className="info-card"><strong>Hoja actual</strong><p>{formatCm(canvasSize.width)} x {formatCm(canvasSize.height)} cm. Imágenes cargadas: {imageLayers.length}.</p></div>
+                    <div className="mockup-toggle-list">
+                      <label className="mockup-toggle"><input id="toggleDesignShirt" type="checkbox" checked={showShirt} onChange={(e) => setShowShirt(e.target.checked)} /> Mostrar remera</label>
+                      <label className="mockup-toggle"><input id="toggleDesignText" type="checkbox" checked={showText} onChange={(e) => setShowText(e.target.checked)} /> Mostrar texto</label>
+                      <label className="mockup-toggle"><input id="toggleDesignShape" type="checkbox" checked={showShape} onChange={(e) => setShowShape(e.target.checked)} /> Mostrar figura</label>
+                    </div>
+                    <p className="hint">El lienzo empieza vacío. Agregá mockups o elementos desde Diseñar remera cuando corresponda.</p>
+                  </section>
+
+                  <section className={`tool-panel${activeTool === "remera" ? " active" : ""}`} id="tool-remera">
+                    <h3>Diseñar remera</h3>
+                    <div className="panel-action-row">
+                      <button className="btn soft small" type="button" onClick={addShirtMockup}>Agregar remera</button>
+                      <button className="btn soft small" type="button" onClick={addTextLayer}>Agregar texto</button>
+                      <button className="btn soft small" type="button" onClick={addShapeLayer}>Agregar figura</button>
+                    </div>
+
+                    <div className="tool-subsection">
+                      <h4>Texto</h4>
+                      <div className="form-row">
+                        <label>Texto principal<input id="designTextInput" value={designText} onChange={(e) => { setDesignText(e.target.value); setShowText(Boolean(e.target.value)); }} /></label>
+                        <label>Tamaño<select id="designTextSize" value={textSize} onChange={(e) => setTextSize(e.target.value)}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label>
+                      </div>
+                      <label>Tipografía<select><option>Sans</option><option>Bold</option><option>Script</option></select></label>
+                    </div>
+
+                    <div className="tool-subsection">
+                      <h4>Colores</h4>
+                      <div className="palette-block"><strong>Paleta vibrante</strong><div className="color-palette">{["#8b4bff", "#6a2db8", "#35d07f", "#ffcc66", "#0b0613"].map((color) => <button key={color} className={`color-chip${selectedColor === color ? " active" : ""}`} style={{ "--chip-color": color }} title={color} type="button" onClick={() => setSelectedColor(color)}></button>)}</div></div>
+                      <div className="palette-block"><strong>Paleta pastel</strong><div className="color-palette">{["#f7b2d9", "#ffd8a8", "#c7f9cc", "#a9def9", "#d0bfff"].map((color) => <button key={color} className={`color-chip${selectedColor === color ? " active" : ""}`} style={{ "--chip-color": color }} title={color} type="button" onClick={() => setSelectedColor(color)}></button>)}</div></div>
+                      <div className="palette-block"><strong>Paleta industrial</strong><div className="color-palette">{["#111827", "#374151", "#ef4444", "#0ea5e9", "#f97316"].map((color) => <button key={color} className={`color-chip${selectedColor === color ? " active" : ""}`} style={{ "--chip-color": color }} title={color} type="button" onClick={() => setSelectedColor(color)}></button>)}</div></div>
+                    </div>
+
+                    <div className="tool-subsection">
+                      <h4>Figuras</h4>
+                      <div className="shape-grid">
+                        <button className={`shape-btn${shapeType === "circle" ? " active" : ""}`} type="button" onClick={() => { setShapeType("circle"); setShowShape(true); }}>Círculo</button>
+                        <button className={`shape-btn${shapeType === "square" ? " active" : ""}`} type="button" onClick={() => { setShapeType("square"); setShowShape(true); }}>Cuadrado</button>
+                        <button className={`shape-btn${shapeType === "pill" ? " active" : ""}`} type="button" onClick={() => { setShapeType("pill"); setShowShape(true); }}>Píldora</button>
+                      </div>
+                    </div>
                   </section>
                 </div>
               </div>
