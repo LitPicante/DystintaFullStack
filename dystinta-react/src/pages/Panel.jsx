@@ -5,7 +5,7 @@ import WhatsAppAdminPanel from "../components/WhatsAppAdminPanel";
 import { adminToolsService, authService, mediaService, orderService, siteService, userService } from "../services/backend";
 
 const STATUS_OPTIONS = ["Nuevo", "En revisión", "Archivo recibido", "En diseño", "Aprobación cliente", "Producción", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado"];
-const SERVICE_OPTIONS = ["DTF Textil", "DTF UV", "Serigrafía"];
+const SERVICE_OPTIONS = ["DTF Textil", "DTF UV", "Serigrafía", "Catálogo"];
 const COMPLETED_STATUSES = ["Entregado", "Finalizado"];
 const ORDER_UPDATE_TIMEOUT_MS = 20000;
 const EMPTY_USER_FORM = { username: "", password: "", role: "designer", name: "", is_active: true };
@@ -107,6 +107,26 @@ function DtfOrderBreakdown({ order }) {
           {design.fileName ? ` · ${design.fileName}` : ""}
         </span>
       ))}
+    </div>
+  );
+}
+
+function CatalogOrderBreakdown({ order }) {
+  const cart = order.extraData?.source === "catalog-cart" && Array.isArray(order.extraData?.cart)
+    ? order.extraData.cart
+    : [];
+  if (!cart.length) return null;
+
+  return (
+    <div className="dtf-order-breakdown catalog-order-breakdown">
+      <strong>Productos del carrito</strong>
+      {cart.map((item, index) => (
+        <span key={item.id || `${item.name}-${index}`}>
+          {index + 1}. {item.name} x {item.quantity}
+          {item.subtotal ? ` · ${Number(item.subtotal).toLocaleString("es-PY")} Gs.` : ""}
+        </span>
+      ))}
+      {order.extraData?.total ? <strong>Total: {Number(order.extraData.total).toLocaleString("es-PY")} Gs.</strong> : null}
     </div>
   );
 }
@@ -1109,6 +1129,7 @@ export default function Panel({ initialTab = "dashboard" }) {
                             {order.service}<br />
                             <span className="hint">{order.quantity || ""}</span>
                             <DtfOrderBreakdown order={order} />
+                            <CatalogOrderBreakdown order={order} />
                           </td>
                           <td>
                             <div className="order-file-list">
@@ -1234,7 +1255,7 @@ export default function Panel({ initialTab = "dashboard" }) {
                           </td>
                           <td>{order.orderNumber || "-"}</td>
                           <td><strong>{order.name}</strong><br /><span className="hint">{order.phone}</span></td>
-                          <td>{order.service}<br /><span className="hint">{order.quantity || ""}</span></td>
+                          <td>{order.service}<br /><span className="hint">{order.quantity || ""}</span><CatalogOrderBreakdown order={order} /></td>
                           <td>
                             <div className="order-file-list">
                               {order.file ? <a href={order.file} target="_blank" rel="noreferrer">{order.fileName || "Archivo principal"}</a> : order.fileName || "Sin archivo"}

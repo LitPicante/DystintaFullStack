@@ -462,6 +462,79 @@ export default function Disenos() {
     return new File([bytes], filename, { type: mime });
   }
 
+  function escapeXml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function getDraggablePosition(ref, fallback = { x: 0, y: 0 }) {
+    const element = ref.current;
+    return {
+      x: Number(element?.dataset?.x || fallback.x),
+      y: Number(element?.dataset?.y || fallback.y),
+    };
+  }
+
+  function buildMockupSnapshotSvg() {
+    const width = canvasPixelSize.width;
+    const height = canvasPixelSize.height;
+    const textPosition = getDraggablePosition(previewTextRef, { x: 0, y: -8 });
+    const shapePosition = getDraggablePosition(previewShapeRef, { x: 0, y: 38 });
+    const shirtPosition = getDraggablePosition(previewShirtRef, { x: 0, y: 0 });
+    const textFontPx = textSize === "Grande" ? 32 : textSize === "Pequeño" ? 16 : 22;
+    const shapeWidth = shapeType === "pill" ? 170 : 110;
+    const shapeHeight = shapeType === "pill" ? 78 : 110;
+    const shapeRadius = shapeType === "square" ? 24 : shapeType === "pill" ? 39 : 55;
+    const shirtX = width / 2 + shirtPosition.x - 135;
+    const shirtY = height / 2 + shirtPosition.y - 155;
+    const shapeX = width / 2 + shapePosition.x - shapeWidth / 2;
+    const shapeY = height / 2 + shapePosition.y - shapeHeight / 2;
+    const textX = width / 2 + textPosition.x;
+    const textY = height / 2 + textPosition.y;
+
+    const layerMarkup = imageLayers.map((layer) => `
+      <image href="${escapeXml(layer.src)}" x="${layer.xCm * CM_TO_PX}" y="${layer.yCm * CM_TO_PX}" width="${layer.widthCm * CM_TO_PX}" height="${layer.heightCm * CM_TO_PX}" preserveAspectRatio="xMidYMid meet" />
+      <rect x="${layer.xCm * CM_TO_PX}" y="${layer.yCm * CM_TO_PX}" width="${layer.widthCm * CM_TO_PX}" height="${layer.heightCm * CM_TO_PX}" fill="none" stroke="#00eaff" stroke-width="1" stroke-dasharray="4 4" />
+      <text x="${layer.xCm * CM_TO_PX + 4}" y="${layer.yCm * CM_TO_PX + 14}" fill="#00eaff" font-family="Arial" font-size="11">${escapeXml(layer.name)} · ${formatCm(layer.widthCm)} x ${formatCm(layer.heightCm)} cm</text>
+    `).join("");
+
+    const shirtMarkup = showShirt ? `
+      <g transform="translate(${shirtX} ${shirtY})">
+        <polygon points="75.6,37.2 108,18.6 162,18.6 194.4,37.2 248.4,68.2 270,117.8 232.2,136.4 210.6,99.2 210.6,310 59.4,310 59.4,99.2 37.8,136.4 0,117.8 21.6,68.2" fill="#d4c8ef" stroke="rgba(255,255,255,.45)" stroke-width="2" />
+        <path d="M87 28 Q135 66 183 28" fill="none" stroke="#2a1d3e" stroke-width="22" stroke-linecap="round" />
+      </g>
+    ` : "";
+
+    const shapeMarkup = showShape ? `
+      <rect x="${shapeX}" y="${shapeY}" width="${shapeWidth}" height="${shapeHeight}" rx="${shapeRadius}" fill="${selectedColor}" opacity="0.32" />
+    ` : "";
+
+    const textMarkup = showText && designText ? `
+      <text x="${textX}" y="${textY}" fill="${selectedColor}" font-family="Arial, sans-serif" font-size="${textFontPx}" font-weight="900" text-anchor="middle" dominant-baseline="middle">${escapeXml(designText)}</text>
+    ` : "";
+
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <rect width="100%" height="100%" fill="#21172c" />
+        <rect x="0.5" y="0.5" width="${width - 1}" height="${height - 1}" fill="none" stroke="#8b4bff" stroke-width="1" />
+        <text x="14" y="22" fill="#ffffff" font-family="Arial" font-size="14" font-weight="700">Lienzo: ${formatCm(canvasSize.width)} x ${formatCm(canvasSize.height)} cm</text>
+        ${shirtMarkup}
+        ${layerMarkup}
+        ${shapeMarkup}
+        ${textMarkup}
+      </svg>
+    `.trim();
+  }
+
+  function createMockupSnapshotFile() {
+    const svg = buildMockupSnapshotSvg();
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    return new File([blob], "lienzo-mockup-cliente.svg", { type: "image/svg+xml" });
+  }
+
   async function submitMockupOrder(event) {
     event.preventDefault();
     setSendingOrder(true);
@@ -479,6 +552,7 @@ export default function Disenos() {
         `Imágenes en lienzo: ${imageLayers.length}.`,
         `Remera de fondo: ${showShirt ? "visible" : "eliminada/oculta"}.`,
         `Lienzo: ${canvasSize.width} x ${canvasSize.height} cm.`,
+        "Archivo de armado del lienzo: adjunto como lienzo-mockup-cliente.svg.",
         orderForm.notes ? `Notas del cliente: ${orderForm.notes}` : "",
       ].filter(Boolean).join("\n");
       const extraData = {
@@ -506,9 +580,13 @@ export default function Disenos() {
       payload.append("details", details);
       payload.append("extraData", JSON.stringify(extraData));
 
+      const snapshotFile = createMockupSnapshotFile();
+      payload.append("file", snapshotFile);
+      payload.append("attachments", snapshotFile);
+
       imageLayers.forEach((layer, index) => {
         if (!layer.file) return;
-        if (index === 0) payload.append("file", layer.file);
+        if (index === 0 && !snapshotFile) payload.append("file", layer.file);
         payload.append("attachments", layer.file);
       });
 
@@ -565,7 +643,7 @@ export default function Disenos() {
                       height: `${canvasPixelSize.height}px`,
                     }}
                   >
-                    {showShirt ? <div ref={previewShirtRef} className="canvas-shirt"></div> : null}
+                    <div ref={previewShirtRef} className={`canvas-shirt${showShirt ? "" : " hidden"}`}></div>
                     {imageLayers.map((layer) => {
                       const selected = selectedLayerId === layer.id;
                       return (
