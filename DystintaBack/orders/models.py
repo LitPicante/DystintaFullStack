@@ -68,11 +68,13 @@ class Order(TimestampedModel):
     SERVICE_DTF_TEXTIL = "DTF Textil"
     SERVICE_DTF_UV = "DTF UV"
     SERVICE_SERIGRAFIA = "Serigrafía"
+    SERVICE_CATALOGO = "Catálogo"
 
     SERVICE_CHOICES = (
         (SERVICE_DTF_TEXTIL, "DTF Textil"),
         (SERVICE_DTF_UV, "DTF UV"),
         (SERVICE_SERIGRAFIA, "Serigrafía"),
+        (SERVICE_CATALOGO, "Catálogo"),
     )
 
     service = models.CharField(max_length=50, choices=SERVICE_CHOICES)

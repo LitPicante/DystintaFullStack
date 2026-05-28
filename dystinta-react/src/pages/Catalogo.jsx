@@ -134,8 +134,12 @@ export default function Catalogo() {
       setSuccess("Pedido enviado correctamente. El equipo de Dystinta lo va a gestionar desde el backoffice.");
       setCart([]);
       setCustomerForm({ name: "", phone: "", notes: "" });
-    } catch {
-      setError("No se pudo enviar el pedido del catálogo.");
+    } catch (err) {
+      const responseData = err?.response?.data;
+      const detail = responseData
+        ? Object.entries(responseData).map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(", ") : value}`).join(" ")
+        : "";
+      setError(detail ? `No se pudo enviar el pedido del catálogo. ${detail}` : "No se pudo enviar el pedido del catálogo.");
     } finally {
       setSendingOrder(false);
     }
