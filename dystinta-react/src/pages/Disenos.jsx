@@ -116,10 +116,12 @@ export default function Disenos() {
   const [orderForm, setOrderForm] = useState(EMPTY_ORDER_FORM);
 
   const canvasRef = useRef(null);
+  const previewShirtRef = useRef(null);
   const previewTextRef = useRef(null);
   const previewShapeRef = useRef(null);
   const layerInteractionRef = useRef(null);
 
+  useDraggable(previewShirtRef, canvasRef, { x: 0, y: 0 });
   useDraggable(previewTextRef, canvasRef, { x: 0, y: -8 });
   useDraggable(previewShapeRef, canvasRef, { x: 0, y: 38 });
 
@@ -427,13 +429,26 @@ export default function Disenos() {
     setShowShirt(true);
   }
 
+  function removeShirtMockup() {
+    setShowShirt(false);
+  }
+
   function addTextLayer() {
     setShowText(true);
     setDesignText((current) => current || "Texto");
   }
 
+  function removeTextLayer() {
+    setShowText(false);
+    setDesignText("");
+  }
+
   function addShapeLayer() {
     setShowShape(true);
+  }
+
+  function removeShapeLayer() {
+    setShowShape(false);
   }
 
   function dataUrlToFile(dataUrl, filename) {
@@ -550,7 +565,7 @@ export default function Disenos() {
                       height: `${canvasPixelSize.height}px`,
                     }}
                   >
-                    {showShirt ? <div className="canvas-shirt"></div> : null}
+                    {showShirt ? <div ref={previewShirtRef} className="canvas-shirt"></div> : null}
                     {imageLayers.map((layer) => {
                       const selected = selectedLayerId === layer.id;
                       return (
@@ -624,11 +639,6 @@ export default function Disenos() {
                     </div>
                     <label>Agregar imágenes al lienzo<input type="file" accept="image/*" multiple onChange={handleCanvasImageUpload} /></label>
                     <div className="info-card"><strong>Hoja actual</strong><p>{formatCm(canvasSize.width)} x {formatCm(canvasSize.height)} cm. Imágenes cargadas: {imageLayers.length}.</p></div>
-                    <div className="mockup-toggle-list">
-                      <label className="mockup-toggle"><input id="toggleDesignShirt" type="checkbox" checked={showShirt} onChange={(e) => setShowShirt(e.target.checked)} /> Mostrar remera</label>
-                      <label className="mockup-toggle"><input id="toggleDesignText" type="checkbox" checked={showText} onChange={(e) => setShowText(e.target.checked)} /> Mostrar texto</label>
-                      <label className="mockup-toggle"><input id="toggleDesignShape" type="checkbox" checked={showShape} onChange={(e) => setShowShape(e.target.checked)} /> Mostrar figura</label>
-                    </div>
                     <p className="hint">El lienzo empieza vacío. Agregá mockups o elementos desde Diseñar remera cuando corresponda.</p>
                   </section>
 
@@ -638,6 +648,18 @@ export default function Disenos() {
                       <button className="btn soft small" type="button" onClick={addShirtMockup}>Agregar remera</button>
                       <button className="btn soft small" type="button" onClick={addTextLayer}>Agregar texto</button>
                       <button className="btn soft small" type="button" onClick={addShapeLayer}>Agregar figura</button>
+                    </div>
+
+                    <div className="mockup-toggle-list">
+                      <label className="mockup-toggle"><input id="toggleDesignShirt" type="checkbox" checked={showShirt} onChange={(e) => setShowShirt(e.target.checked)} /> Mostrar remera</label>
+                      <label className="mockup-toggle"><input id="toggleDesignText" type="checkbox" checked={showText} onChange={(e) => setShowText(e.target.checked)} /> Mostrar texto</label>
+                      <label className="mockup-toggle"><input id="toggleDesignShape" type="checkbox" checked={showShape} onChange={(e) => setShowShape(e.target.checked)} /> Mostrar figura</label>
+                    </div>
+
+                    <div className="panel-action-row">
+                      <button className="btn soft small" type="button" onClick={removeShirtMockup} disabled={!showShirt}>Eliminar remera</button>
+                      <button className="btn soft small" type="button" onClick={removeTextLayer} disabled={!showText && !designText}>Eliminar texto</button>
+                      <button className="btn soft small" type="button" onClick={removeShapeLayer} disabled={!showShape}>Eliminar figura</button>
                     </div>
 
                     <div className="tool-subsection">
