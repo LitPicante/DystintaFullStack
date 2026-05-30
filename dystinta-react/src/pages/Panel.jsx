@@ -299,7 +299,7 @@ function BackofficeDashboard({ orders, loading }) {
       <section className="dashboard-hero">
         <div>
           <span className="badge">Back office</span>
-          <h2>Dashboard de pedidos finalizados</h2>
+          <h2>Panel de pedidos finalizados</h2>
           <p className="lead">Vista operativa de cierres por día, semana y mes usando los pedidos actuales del backend.</p>
         </div>
         <div className="dashboard-orbit">
@@ -405,6 +405,7 @@ export default function Panel({ initialTab = "dashboard" }) {
   const [creatingOrder, setCreatingOrder] = useState(false);
 
   const isAdmin = me?.role === "admin";
+  const canViewHistory = me?.role === "admin" || me?.role === "designer";
   const adminUser = users.find((user) => user.username === "admin");
   const companyName = siteData?.general?.companyName || "";
   const queryParams = useMemo(() => {
@@ -431,7 +432,7 @@ export default function Panel({ initialTab = "dashboard" }) {
   }, [queryParams]);
 
   const loadHistoryOrders = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canViewHistory) return;
     setHistoryLoading(true);
     setError("");
     try {
@@ -442,7 +443,7 @@ export default function Panel({ initialTab = "dashboard" }) {
     } finally {
       setHistoryLoading(false);
     }
-  }, [isAdmin]);
+  }, [canViewHistory]);
 
   const loadDashboardOrders = useCallback(async () => {
     setDashboardLoading(true);
@@ -497,7 +498,7 @@ export default function Panel({ initialTab = "dashboard" }) {
 
   useEffect(() => { if (me) loadOrders(); }, [me, loadOrders]);
   useEffect(() => { if (me) loadDashboardOrders(); }, [me, loadDashboardOrders]);
-  useEffect(() => { if (me && isAdmin && activeTab === "history") loadHistoryOrders(); }, [me, isAdmin, activeTab, loadHistoryOrders]);
+  useEffect(() => { if (me && canViewHistory && activeTab === "history") loadHistoryOrders(); }, [me, canViewHistory, activeTab, loadHistoryOrders]);
 
   function handleLogout() {
     const refresh = localStorage.getItem("refresh");
@@ -1026,7 +1027,7 @@ export default function Panel({ initialTab = "dashboard" }) {
             <button className={`tab-btn${activeTab === "dashboard" ? " active" : ""}`} type="button" onClick={() => setActiveTab("dashboard")}>Dashboard</button>
             <button className={`tab-btn${activeTab === "orders" ? " active" : ""}`} type="button" onClick={() => setActiveTab("orders")}>Pedidos</button>
             <button className={`tab-btn${activeTab === "create-order" ? " active" : ""}`} type="button" onClick={() => setActiveTab("create-order")}>Crear pedido</button>
-            {isAdmin ? <button className={`tab-btn${activeTab === "history" ? " active" : ""}`} type="button" onClick={() => setActiveTab("history")}>Historial</button> : null}
+            {canViewHistory ? <button className={`tab-btn${activeTab === "history" ? " active" : ""}`} type="button" onClick={() => setActiveTab("history")}>Historial</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "content" ? " active" : ""}`} type="button" onClick={() => setActiveTab("content")}>Contenido</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "catalog" ? " active" : ""}`} type="button" onClick={() => setActiveTab("catalog")}>Catálogo</button> : null}
             {isAdmin ? <button className={`tab-btn${activeTab === "whatsapp" ? " active" : ""}`} type="button" onClick={() => setActiveTab("whatsapp")}>WhatsApp</button> : null}
@@ -1237,7 +1238,7 @@ export default function Panel({ initialTab = "dashboard" }) {
             </>
           ) : null}
 
-          {isAdmin && activeTab === "history" ? (
+          {canViewHistory && activeTab === "history" ? (
             <div className="panel-stack">
               <section className="card panel-block">
                 <div className="panel-section-header">
@@ -1256,12 +1257,12 @@ export default function Panel({ initialTab = "dashboard" }) {
                 <table className="table orders-table">
                   <thead>
                     <tr>
-                      <th>Archivado</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Diseñador</th><th>Motivo</th><th>Acciones</th>
+                      <th>Archivado</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th>{isAdmin ? <th>Diseñador</th> : null}<th>Motivo</th>{isAdmin ? <th>Acciones</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {historyLoading ? (
-                      <tr><td colSpan="9">Cargando historial...</td></tr>
+                      <tr><td colSpan={isAdmin ? 9 : 7}>Cargando historial...</td></tr>
                     ) : historyOrders.length ? (
                       historyOrders.map((order) => (
                         <tr key={order.id}>
@@ -1288,9 +1289,9 @@ export default function Panel({ initialTab = "dashboard" }) {
                             </div>
                           </td>
                           <td><span className={`status ${statusClass(order.status)}`}>{order.status}</span></td>
-                          <td>{order.assignedTo?.name || "Sin asignar"}</td>
+                          {isAdmin ? <td>{order.assignedTo?.name || "Sin asignar"}</td> : null}
                           <td>{order.archivedReason || "-"}</td>
-                          <td>
+                          {isAdmin ? <td>
                             <button
                               className="btn danger small"
                               type="button"
@@ -1299,11 +1300,11 @@ export default function Panel({ initialTab = "dashboard" }) {
                             >
                               {savingOrderId === order.id ? "Ocultando..." : "Eliminar"}
                             </button>
-                          </td>
+                          </td> : null}
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan="9">Todavía no hay pedidos en historial.</td></tr>
+                      <tr><td colSpan={isAdmin ? 9 : 7}>Todavía no hay pedidos en historial.</td></tr>
                     )}
                   </tbody>
                 </table>

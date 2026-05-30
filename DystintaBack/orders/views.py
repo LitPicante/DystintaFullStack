@@ -45,7 +45,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             return [AllowAny()]
-        if self.action in {"history", "hide_from_history"}:
+        if self.action == "history":
+            return [IsAdminOrDesigner()]
+        if self.action == "hide_from_history":
             return [IsAdmin()]
         if self.action == "destroy":
             return [IsAdminOrDesigner()]
