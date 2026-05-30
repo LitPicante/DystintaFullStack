@@ -87,8 +87,6 @@ export default function Admin() {
   return (
     <div id="loginView" className="login-box">
       <h2>Back office Dystinta</h2>
-      <p className="hint">Ingresá con usuario interno. Admin ve todo; designer solo pedidos.</p>
-
       <form id="loginForm" onSubmit={handleLogin}>
         <label>
           Usuario
@@ -115,8 +113,6 @@ export default function Admin() {
           {loading ? "Ingresando..." : "Ingresar"}
         </button>
       </form>
-
-      <p className="hint">Demo: admin / admin123 o designer / designer123</p>
 
       <div id="loginMsg">
         {msg ? <div className="notice danger">{msg}</div> : null}

@@ -274,6 +274,125 @@ def send_text_message(phone: str, text: str) -> WhatsAppSendResult:
     )
 
 
+def get_admin_whatsapp_number() -> str:
+    """Obtiene y normaliza el numero interno del administrador."""
+
+    raw_number = _setting("ADMIN_WHATSAPP_NUMBER")
+    admin_number = normalize_whatsapp_phone(raw_number)
+
+    if raw_number and not admin_number:
+        logger.warning(
+            "whatsapp.admin_notification.invalid_number raw=%s",
+            raw_number,
+        )
+
+    return admin_number
+
+
+def send_admin_notification(message: str) -> WhatsAppSendResult:
+    """Envia una notificacion interna al administrador por WhatsApp."""
+
+    if not bool(getattr(settings, "ADMIN_WHATSAPP_ENABLED", False)):
+        logger.info("whatsapp.admin_notification.skipped_disabled")
+        return WhatsAppSendResult(
+            sent=False,
+            reason="disabled",
+        )
+
+    admin_number = get_admin_whatsapp_number()
+
+    if not admin_number:
+        logger.warning("whatsapp.admin_notification.skipped_missing_number")
+        return WhatsAppSendResult(
+            sent=False,
+            reason="missing_admin_number",
+        )
+
+    if not message:
+        logger.warning("whatsapp.admin_notification.skipped_empty_message")
+        return WhatsAppSendResult(
+            sent=False,
+            reason="empty_message",
+        )
+
+    try:
+        result = send_text_message(admin_number, message)
+
+    except WhatsAppDeliveryError:
+        logger.exception(
+            "whatsapp.admin_notification.failed number=%s",
+            admin_number,
+        )
+        return WhatsAppSendResult(
+            sent=False,
+            reason="delivery_error",
+        )
+
+    logger.info(
+        "whatsapp.admin_notification.sent number=%s",
+        admin_number,
+    )
+
+    return result
+
+
+def _admin_order_label(order: Order) -> str:
+    order_number = (order.order_number or "").strip()
+    return f"#{order_number}" if order_number else f"ID {order.pk}"
+
+
+def notify_admin_new_order(order: Order) -> WhatsAppSendResult:
+    message = (
+        "🔔 Nuevo pedido recibido\n\n"
+        f"Cliente: {order.name or '-'}\n"
+        f"Servicio: {order.service or '-'}\n"
+        f"Pedido {_admin_order_label(order)}"
+    )
+
+    return send_admin_notification(message)
+
+
+def notify_admin_status_change(order: Order) -> WhatsAppSendResult:
+    message = (
+        f"📦 Pedido {_admin_order_label(order)}\n\n"
+        f"Cliente: {order.name or '-'}\n\n"
+        "Nuevo estado:\n"
+        f"{order.status}"
+    )
+
+    return send_admin_notification(message)
+
+
+def notify_admin_design_approved(order: Order) -> WhatsAppSendResult:
+    message = (
+        "✅ Cliente aprobó diseño\n\n"
+        f"Pedido {_admin_order_label(order)}\n"
+        f"Cliente: {order.name or '-'}"
+    )
+
+    return send_admin_notification(message)
+
+
+def notify_admin_design_rejected(
+    order: Order,
+    customer_response: str | None = None,
+) -> WhatsAppSendResult:
+    message = (
+        "⚠️ Cliente rechazó diseño\n\n"
+        f"Pedido {_admin_order_label(order)}\n"
+        f"Cliente: {order.name or '-'}"
+    )
+
+    if customer_response:
+        message = (
+            f"{message}\n\n"
+            "Respuesta:\n"
+            f"{customer_response}"
+        )
+
+    return send_admin_notification(message)
+
+
 def send_order_status_message(order: Order) -> WhatsAppSendResult:
     """Genera y envia el mensaje automatico correspondiente al estado actual."""
 
@@ -513,6 +632,11 @@ def process_evolution_webhook(payload: dict[str, Any]) -> dict[str, Any]:
             "updated_at",
         ]
     )
+
+    if action == "approved":
+        notify_admin_design_approved(order)
+    else:
+        notify_admin_design_rejected(order, text)
 
     return {
         "processed": True,

@@ -18,7 +18,12 @@ from .serializers import (
     OrderTrackingSerializer,
     OrderUpdateSerializer,
 )
-from .services.whatsapp_service import process_evolution_webhook, send_order_status_message_on_commit
+from .services.whatsapp_service import (
+    notify_admin_new_order,
+    notify_admin_status_change,
+    process_evolution_webhook,
+    send_order_status_message_on_commit,
+)
 
 
 class OrderViewSet(viewsets.ModelViewSet):
@@ -28,8 +33,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             return [AllowAny()]
-        if self.action in {"destroy", "history"}:
+        if self.action == "history":
             return [IsAdmin()]
+        if self.action == "destroy":
+            return [IsAdminOrDesigner()]
         return [IsAdminOrDesigner()]
 
     def get_queryset(self):
@@ -103,6 +110,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     original_name=uploaded_file.name,
                 )
             send_order_status_message_on_commit(order)
+            transaction.on_commit(lambda order_id=order.pk: notify_admin_new_order(Order.objects.get(pk=order_id)))
         output = OrderCreateSerializer(order, context={"request": request})
         return Response(output.data, status=status.HTTP_201_CREATED)
 
@@ -116,6 +124,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             order = serializer.save()
             if previous_status != order.status or previous_order_number != order.order_number:
                 send_order_status_message_on_commit(order)
+            if previous_status != order.status:
+                transaction.on_commit(lambda order_id=order.pk: notify_admin_status_change(Order.objects.get(pk=order_id)))
         output = OrderDetailSerializer(instance, context={"request": request})
         return Response(output.data, status=status.HTTP_200_OK)
 

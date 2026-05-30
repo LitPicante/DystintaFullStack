@@ -233,3 +233,13 @@ EVOLUTION_API_TIMEOUT = int(
 )	
 
 FRONTEND_PUBLIC_URL = os.getenv("FRONTEND_PUBLIC_URL", "http://localhost:3000")
+
+ADMIN_WHATSAPP_ENABLED = os.getenv(
+    "ADMIN_WHATSAPP_ENABLED",
+    "False"
+).lower() == "true"
+
+ADMIN_WHATSAPP_NUMBER = os.getenv(
+    "ADMIN_WHATSAPP_NUMBER",
+    ""
+)

@@ -1103,15 +1103,15 @@ export default function Panel({ initialTab = "dashboard" }) {
               </div>
 
               <div className="table-wrap">
-                <table className="table">
+                <table className="table orders-table">
                   <thead>
                     <tr>
-                      <th>Fecha</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Progreso</th><th>Diseñador</th><th>Notas</th><th>Acciones</th>
+                      <th>Fecha</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Progreso</th>{isAdmin ? <th>Diseñador</th> : null}<th>Notas</th><th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody id="ordersBody">
                     {loading ? (
-                      <tr><td colSpan="10">Cargando pedidos...</td></tr>
+                      <tr><td colSpan={isAdmin ? 10 : 9}>Cargando pedidos...</td></tr>
                     ) : orders.length ? (
                       orders.map((order) => (
                         <tr key={order.id}>
@@ -1163,14 +1163,14 @@ export default function Panel({ initialTab = "dashboard" }) {
                               <span className="hint">{order.statusMessage || ""}</span>
                             </div>
                           </td>
+                          {isAdmin ? (
                           <td>
-                            {isAdmin ? (
                               <select value={order.assignedTo?.id || ""} onChange={(event) => handleOrderFieldChange(order.id, "assignedTo", event.target.value ? designers.find((designer) => designer.id === Number(event.target.value)) || null : null)} disabled={savingOrderId === order.id}>
                                 <option value="">Sin asignar</option>
                                 {designers.map((designer) => <option key={designer.id} value={designer.id}>{designer.name}</option>)}
                               </select>
-                            ) : order.assignedTo?.name || "Sin asignar"}
                           </td>
+                          ) : null}
                           <td>
                             <textarea
                               value={order.notes || ""}
@@ -1192,27 +1192,25 @@ export default function Panel({ initialTab = "dashboard" }) {
                                 }
                                 disabled={savingOrderId === order.id}
                               >
-                                {savingOrderId === order.id ? "Guardando..." : "Guardar pedido"}
+                                {savingOrderId === order.id ? "Guardando..." : "Guardar"}
                               </button>
                               <button className="btn soft small" type="button" onClick={() => handleCopyTrackingLink(order)}>
-                                Copiar seguimiento
+                                Copiar link
                               </button>
-                              {isAdmin ? (
-                                <button
-                                  className="btn soft small"
-                                  type="button"
-                                  onClick={() => archiveOrder(order)}
-                                  disabled={savingOrderId === order.id}
-                                >
-                                  Enviar a historial
-                                </button>
-                              ) : null}
+                              <button
+                                className="btn soft small"
+                                type="button"
+                                onClick={() => archiveOrder(order)}
+                                disabled={savingOrderId === order.id}
+                              >
+                                Eliminar
+                              </button>
                             </div>
                           </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan="10">No hay pedidos aún.</td></tr>
+                      <tr><td colSpan={isAdmin ? 10 : 9}>No hay pedidos aún.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -1236,7 +1234,7 @@ export default function Panel({ initialTab = "dashboard" }) {
               </section>
 
               <section className="table-wrap">
-                <table className="table">
+                <table className="table orders-table">
                   <thead>
                     <tr>
                       <th>Archivado</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Diseñador</th><th>Motivo</th>
