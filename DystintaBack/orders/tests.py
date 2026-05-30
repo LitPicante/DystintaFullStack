@@ -1,8 +1,10 @@
 from django.test import TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from accounts.models import User
 from orders.models import Order
 from orders.serializers import OrderCreateSerializer
+from orders.views import OrderViewSet
 from orders.services.assignment_service import select_designer_for_new_order
 from orders.services.whatsapp_service import build_order_status_message
 
@@ -31,6 +33,12 @@ class OrderAssignmentServiceTests(TestCase):
         serializer.is_valid(raise_exception=True)
         return serializer.save()
 
+    def post_order_as_user(self, payload, user):
+        view = OrderViewSet.as_view({"post": "create"})
+        request = APIRequestFactory().post("/api/orders/", payload, format="multipart")
+        force_authenticate(request, user=user)
+        return view(request)
+
     def test_returns_none_when_no_active_designers_exist(self):
         self.assertIsNone(select_designer_for_new_order())
 
@@ -48,6 +56,40 @@ class OrderAssignmentServiceTests(TestCase):
         self.assertEqual(second.assigned_to_id, designer_2.id)
         self.assertEqual(third.assigned_to_id, designer_3.id)
         self.assertEqual(fourth.assigned_to_id, designer_1.id)
+
+    def test_authenticated_public_order_still_uses_balanced_assignment(self):
+        designer_1 = self.create_designer("designer-1")
+        designer_2 = self.create_designer("designer-2")
+        Order.objects.create(
+            service=Order.SERVICE_DTF_TEXTIL,
+            name="Cliente previo",
+            phone="0982317317",
+            assigned_to=designer_1,
+        )
+
+        response = self.post_order_as_user(self.create_order_payload(1), designer_1)
+        order = Order.objects.order_by("-id").first()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(order.assigned_to_id, designer_2.id)
+
+    def test_backoffice_designer_order_is_assigned_to_request_designer(self):
+        designer_1 = self.create_designer("designer-1")
+        designer_2 = self.create_designer("designer-2")
+        Order.objects.create(
+            service=Order.SERVICE_DTF_TEXTIL,
+            name="Cliente previo",
+            phone="0982317317",
+            assigned_to=designer_2,
+        )
+        payload = self.create_order_payload(1)
+        payload["extraData"] = '{"source":"backoffice-create-order"}'
+
+        response = self.post_order_as_user(payload, designer_1)
+        order = Order.objects.order_by("-id").first()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(order.assigned_to_id, designer_1.id)
 
     def test_ignores_inactive_designers(self):
         inactive = self.create_designer("inactive")

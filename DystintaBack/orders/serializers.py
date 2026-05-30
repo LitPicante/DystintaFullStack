@@ -123,6 +123,8 @@ class OrderListSerializer(serializers.ModelSerializer):
     archivedAt = serializers.DateTimeField(source="archived_at", read_only=True)
     archivedBy = UserSerializer(source="archived_by", read_only=True)
     archivedReason = serializers.CharField(source="archived_reason", read_only=True)
+    historyHiddenAt = serializers.DateTimeField(source="history_hidden_at", read_only=True)
+    historyHiddenBy = UserSerializer(source="history_hidden_by", read_only=True)
     isArchived = serializers.BooleanField(source="is_archived", read_only=True)
     statusMessage = serializers.SerializerMethodField()
     attachments = OrderAttachmentSerializer(many=True, read_only=True)
@@ -153,6 +155,8 @@ class OrderListSerializer(serializers.ModelSerializer):
             "archivedAt",
             "archivedBy",
             "archivedReason",
+            "historyHiddenAt",
+            "historyHiddenBy",
             "isArchived",
             "statusMessage",
             "attachments",

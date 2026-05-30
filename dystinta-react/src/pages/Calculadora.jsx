@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import OrderSuccessModal from "../components/OrderSuccessModal";
 
 const FILM_SIZES = [
   { id: "20x20", label: "20 x 20 cm", width: 20, previewLength: 20 },
@@ -381,6 +382,7 @@ export default function Calculadora() {
 
       await api.post("/orders/", payload, {
         headers: { "Content-Type": "multipart/form-data" },
+        skipAuth: true,
       });
 
       setMessage("Pedido DTF enviado correctamente.");
@@ -403,6 +405,7 @@ export default function Calculadora() {
   return (
     <>
       <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
+      <OrderSuccessModal open={Boolean(message)} onClose={() => setMessage("")} />
 
       <section className="section">
         <div className="container">
@@ -420,7 +423,6 @@ export default function Calculadora() {
               </div>
             </div>
 
-            {message ? <div className="notice">{message}</div> : null}
             {error && site ? <div className="notice danger">{error}</div> : null}
 
             <section className="card calc-config">

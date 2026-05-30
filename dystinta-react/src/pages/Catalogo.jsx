@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import OrderSuccessModal from "../components/OrderSuccessModal";
 
 function formatPrice(value) {
   const number = Number(value || 0);
@@ -129,6 +130,7 @@ export default function Catalogo() {
 
       await api.post("/orders/", payload, {
         headers: { "Content-Type": "multipart/form-data" },
+        skipAuth: true,
       });
 
       setSuccess("Pedido enviado correctamente. El equipo de Dystinta lo va a gestionar desde el backoffice.");
@@ -148,12 +150,12 @@ export default function Catalogo() {
   return (
     <>
       <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
+      <OrderSuccessModal open={Boolean(success)} onClose={() => setSuccess("")} />
       <section className="section">
         <div className="container">
           <span className="badge">Catálogo</span>
           <h2>Productos disponibles</h2>
           <p className="lead">Explorá los productos cargados por el equipo de Dystinta.</p>
-          {success ? <div className="notice">{success}</div> : null}
           {error ? <div className="notice danger">{error}</div> : null}
 
           {products.length ? (

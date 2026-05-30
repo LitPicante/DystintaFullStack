@@ -758,6 +758,25 @@ export default function Panel({ initialTab = "dashboard" }) {
     }
   }
 
+  async function hideHistoryOrder(order) {
+    if (!window.confirm(`El pedido #${order.id} se ocultará del historial, pero seguirá guardado en la base de datos.`)) return;
+
+    setSavingOrderId(order.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      await orderService.hideFromHistory(order.id);
+      setHistoryOrders((current) => current.filter((item) => item.id !== order.id));
+      setSuccess("Pedido ocultado del historial.");
+    } catch {
+      setError("No se pudo ocultar el pedido del historial.");
+      setSuccess("");
+    } finally {
+      setSavingOrderId(null);
+    }
+  }
+
   async function saveSiteSection(section) {
     setSavingSection(section.key);
     try {
@@ -1237,12 +1256,12 @@ export default function Panel({ initialTab = "dashboard" }) {
                 <table className="table orders-table">
                   <thead>
                     <tr>
-                      <th>Archivado</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Diseñador</th><th>Motivo</th>
+                      <th>Archivado</th><th>N° pedido</th><th>Cliente</th><th>Servicio</th><th>Archivo</th><th>Estado</th><th>Diseñador</th><th>Motivo</th><th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {historyLoading ? (
-                      <tr><td colSpan="8">Cargando historial...</td></tr>
+                      <tr><td colSpan="9">Cargando historial...</td></tr>
                     ) : historyOrders.length ? (
                       historyOrders.map((order) => (
                         <tr key={order.id}>
@@ -1271,10 +1290,20 @@ export default function Panel({ initialTab = "dashboard" }) {
                           <td><span className={`status ${statusClass(order.status)}`}>{order.status}</span></td>
                           <td>{order.assignedTo?.name || "Sin asignar"}</td>
                           <td>{order.archivedReason || "-"}</td>
+                          <td>
+                            <button
+                              className="btn danger small"
+                              type="button"
+                              onClick={() => hideHistoryOrder(order)}
+                              disabled={savingOrderId === order.id}
+                            >
+                              {savingOrderId === order.id ? "Ocultando..." : "Eliminar"}
+                            </button>
+                          </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan="8">Todavía no hay pedidos en historial.</td></tr>
+                      <tr><td colSpan="9">Todavía no hay pedidos en historial.</td></tr>
                     )}
                   </tbody>
                 </table>

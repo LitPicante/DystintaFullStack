@@ -1,3 +1,5 @@
+import json
+
 from django.db.models import Q
 from django.db import transaction
 from django.utils import timezone
@@ -26,6 +28,16 @@ from .services.whatsapp_service import (
 )
 
 
+def is_backoffice_designer_order(data):
+    extra_data = data.get("extraData") or data.get("extra_data") or {}
+    if isinstance(extra_data, str):
+        try:
+            extra_data = json.loads(extra_data)
+        except json.JSONDecodeError:
+            extra_data = {}
+    return isinstance(extra_data, dict) and extra_data.get("source") == "backoffice-create-order"
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.select_related("assigned_to").prefetch_related("attachments").all().order_by("-created_at")
     http_method_names = ["get", "post", "patch", "delete"]
@@ -33,7 +45,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             return [AllowAny()]
-        if self.action == "history":
+        if self.action in {"history", "hide_from_history"}:
             return [IsAdmin()]
         if self.action == "destroy":
             return [IsAdminOrDesigner()]
@@ -44,7 +56,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if self.action == "history":
-            queryset = queryset.filter(archived_at__isnull=False).order_by("-archived_at", "-updated_at")
+            queryset = queryset.filter(
+                archived_at__isnull=False,
+                history_hidden_at__isnull=True,
+            ).order_by("-archived_at", "-updated_at")
+        elif self.action == "hide_from_history":
+            queryset = queryset.filter(archived_at__isnull=False)
         else:
             queryset = queryset.filter(archived_at__isnull=True)
 
@@ -99,6 +116,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 request.user
                 and request.user.is_authenticated
                 and getattr(request.user, "role", "") == "designer"
+                and is_backoffice_designer_order(request.data)
             ):
                 save_kwargs["assigned_to"] = request.user
 
@@ -155,6 +173,15 @@ class OrderViewSet(viewsets.ModelViewSet):
     def history(self, request):
         serializer = OrderListSerializer(self.get_queryset(), many=True, context={"request": request})
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="hide-from-history")
+    def hide_from_history(self, request, pk=None):
+        instance = self.get_object()
+        instance.history_hidden_at = timezone.now()
+        instance.history_hidden_by = request.user if request.user.is_authenticated else None
+        instance.save(update_fields=["history_hidden_at", "history_hidden_by", "updated_at"])
+        output = OrderDetailSerializer(instance, context={"request": request})
+        return Response(output.data, status=status.HTTP_200_OK)
 
 
 class OrderTrackingView(RetrieveAPIView):

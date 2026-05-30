@@ -69,11 +69,16 @@ function applyTheme(mode, theme) {
 export default function Navbar({ companyName, slogan, theme }) {
   const location = useLocation();
   const [themeMode, setThemeMode] = useState("original");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const adminTheme = useMemo(() => ({ ...DEFAULT_THEME, ...(theme || {}) }), [theme]);
 
   useEffect(() => {
     applyTheme(themeMode, adminTheme);
   }, [themeMode, adminTheme]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const links = [
     { to: "/", label: "Inicio" },
@@ -85,6 +90,10 @@ export default function Navbar({ companyName, slogan, theme }) {
     { to: "/calculadora", label: "Calculadora DTF" },
     { to: "/contacto", label: "Contacto" },
 
+  ];
+  const mobileLinks = [
+    ...links.filter((link) => link.to === "/pedidos"),
+    ...links.filter((link) => link.to !== "/" && link.to !== "/pedidos"),
   ];
 
   return (
@@ -98,8 +107,57 @@ export default function Navbar({ companyName, slogan, theme }) {
               <small data-slogan>{slogan}</small>
             </div>
           </Link>
+          <button
+            className="mobile-menu-toggle"
+            type="button"
+            aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((current) => !current)}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
         </div>
       </header>
+
+      <div className={`mobile-menu-backdrop${mobileMenuOpen ? " open" : ""}`} onClick={() => setMobileMenuOpen(false)}></div>
+      <aside className={`mobile-side-menu${mobileMenuOpen ? " open" : ""}`} aria-hidden={!mobileMenuOpen}>
+        <div className="mobile-side-menu-head">
+          <strong>Menú</strong>
+          <button type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú">×</button>
+        </div>
+        <div className="theme-switcher mobile-theme-switcher" aria-label="Selector de tema móvil">
+          {[
+            ["original", "Original"],
+            ["light", "Claro"],
+            ["dark", "Oscuro"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              className={themeMode === value ? "active" : ""}
+              type="button"
+              onClick={() => setThemeMode(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <nav className="mobile-side-links">
+          {mobileLinks.map((link) => {
+            const isActive = location.pathname === link.to;
+            return (
+              <Link
+                key={link.to}
+                className={isActive ? "active" : ""}
+                to={link.to}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
 
       <section className="home-hero">
         <div className="container home-nav-panel">

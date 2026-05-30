@@ -109,6 +109,14 @@ class Order(TimestampedModel):
         related_name="archived_orders",
     )
     archived_reason = models.CharField(max_length=255, blank=True)
+    history_hidden_at = models.DateTimeField(null=True, blank=True)
+    history_hidden_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="hidden_history_orders",
+    )
 
     @classmethod
     def progress_for_status(cls, status, previous_progress=10):

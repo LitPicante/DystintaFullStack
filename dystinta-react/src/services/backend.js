@@ -43,6 +43,9 @@ export const orderService = {
   archive(id, reason = "") {
     return api.delete(`/orders/${id}/`, { data: { reason } }).then((response) => response.data);
   },
+  hideFromHistory(id) {
+    return api.post(`/orders/${id}/hide-from-history/`).then((response) => response.data);
+  },
   getTracking(token) {
     return api.get(`/orders/tracking/${token}/`).then((response) => response.data);
   },

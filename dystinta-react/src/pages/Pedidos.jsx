@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import OrderSuccessModal from "../components/OrderSuccessModal";
 
 const EMPTY_FORM = {
   name: "",
@@ -94,6 +95,7 @@ export default function Pedidos() {
 
       await api.post("/orders/", payload, {
         headers: { "Content-Type": "multipart/form-data" },
+        skipAuth: true,
       });
 
       setMessage("Pedido enviado correctamente.");
@@ -115,13 +117,13 @@ export default function Pedidos() {
   return (
     <>
       <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
+      <OrderSuccessModal open={Boolean(message)} onClose={() => setMessage("")} />
 
       <section className="section">
         <div className="container">
           <h2>Pedidos online</h2>
           <p className="lead">Elegí el tipo de pedido en la barra de arriba. Al enviar, el pedido se guarda en el panel interno y también se abre WhatsApp con el detalle listo para mandar.</p>
 
-          {message ? <div className="notice">{message}</div> : null}
           {error && site ? <div className="notice danger">{error}</div> : null}
 
           <div className="order-menu-bar" role="tablist" aria-label="Tipos de pedidos">
@@ -134,13 +136,13 @@ export default function Pedidos() {
             <section className={`order-panel${activeTab === "dtf-textil" ? " active" : ""}`} id="panel-dtf-textil">
               <div className="panel-header"><span className="badge">Pedido</span><h3>DTF Textil</h3><p>Ideal para remeras, uniformes y prendas personalizadas.</p></div>
               <form className="order-form order-layout" onSubmit={(event) => submitOrder("dtf-textil", "DTF Textil", event)}>
+                <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleChange("dtf-textil", event)} /></label>
                 <div className="form-row">
                   <label>Nombre<input name="name" required value={forms["dtf-textil"].name} onChange={(event) => handleChange("dtf-textil", event)} /></label>
                   <label>Teléfono<input name="phone" required value={forms["dtf-textil"].phone} onChange={(event) => handleChange("dtf-textil", event)} /></label>
                 </div>
                 <label>Email <span className="hint">(opcional)</span><input type="email" name="email" value={forms["dtf-textil"].email} onChange={(event) => handleChange("dtf-textil", event)} /></label>
                 <label>Detalles<textarea name="details" placeholder="Indicá colores, ubicación del estampado, fechas y cualquier referencia útil." value={forms["dtf-textil"].details} onChange={(event) => handleChange("dtf-textil", event)} /></label>
-                <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleChange("dtf-textil", event)} /></label>
                 <div className="order-actions"><button className="btn" type="submit" disabled={loading}>{loading ? "Enviando..." : "Enviar pedido"}</button></div>
               </form>
             </section>
@@ -148,13 +150,13 @@ export default function Pedidos() {
             <section className={`order-panel${activeTab === "dtf-uv" ? " active" : ""}`} id="panel-dtf-uv">
               <div className="panel-header"><span className="badge">Pedido</span><h3>DTF UV</h3><p>Para envases, objetos rígidos, etiquetas y branding de productos.</p></div>
               <form className="order-form order-layout" onSubmit={(event) => submitOrder("dtf-uv", "DTF UV", event)}>
+                <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleChange("dtf-uv", event)} /></label>
                 <div className="form-row">
                   <label>Nombre<input name="name" required value={forms["dtf-uv"].name} onChange={(event) => handleChange("dtf-uv", event)} /></label>
                   <label>Teléfono<input name="phone" required value={forms["dtf-uv"].phone} onChange={(event) => handleChange("dtf-uv", event)} /></label>
                 </div>
                 <label>Email <span className="hint">(opcional)</span><input type="email" name="email" value={forms["dtf-uv"].email} onChange={(event) => handleChange("dtf-uv", event)} /></label>
                 <label>Detalles<textarea name="details" placeholder="Contanos sobre el producto, acabado y colores." value={forms["dtf-uv"].details} onChange={(event) => handleChange("dtf-uv", event)} /></label>
-                <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleChange("dtf-uv", event)} /></label>
                 <div className="order-actions"><button className="btn" type="submit" disabled={loading}>{loading ? "Enviando..." : "Enviar pedido"}</button></div>
               </form>
             </section>
@@ -162,13 +164,13 @@ export default function Pedidos() {
             <section className={`order-panel${activeTab === "serigrafia" ? " active" : ""}`} id="panel-serigrafia">
               <div className="panel-header"><span className="badge">Pedido</span><h3>Serigrafía</h3><p>Recomendada para volumen, campañas, eventos y tiradas grandes.</p></div>
               <form className="order-form order-layout" onSubmit={(event) => submitOrder("serigrafia", "Serigrafía", event)}>
+                <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleChange("serigrafia", event)} /></label>
                 <div className="form-row">
                   <label>Nombre<input name="name" required value={forms.serigrafia.name} onChange={(event) => handleChange("serigrafia", event)} /></label>
                   <label>Teléfono<input name="phone" required value={forms.serigrafia.phone} onChange={(event) => handleChange("serigrafia", event)} /></label>
                 </div>
                 <label>Email <span className="hint">(opcional)</span><input type="email" name="email" value={forms.serigrafia.email} onChange={(event) => handleChange("serigrafia", event)} /></label>
                 <label>Detalles<textarea name="details" placeholder="Indicá técnica, colores y fecha de entrega." value={forms.serigrafia.details} onChange={(event) => handleChange("serigrafia", event)} /></label>
-                <label>Adjuntar archivo<input type="file" name="file" onChange={(event) => handleChange("serigrafia", event)} /></label>
                 <div className="order-actions"><button className="btn" type="submit" disabled={loading}>{loading ? "Enviando..." : "Enviar pedido"}</button></div>
               </form>
             </section>

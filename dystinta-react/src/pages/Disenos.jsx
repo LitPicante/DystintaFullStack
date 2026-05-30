@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import OrderSuccessModal from "../components/OrderSuccessModal";
 
 const FONT_SIZE_MAP = {
   Pequeño: "1rem",
@@ -603,6 +604,7 @@ export default function Disenos() {
 
       await api.post("/orders/", payload, {
         headers: { "Content-Type": "multipart/form-data" },
+        skipAuth: true,
       });
 
       setSuccess("Pedido de mockup enviado correctamente.");
@@ -620,12 +622,12 @@ export default function Disenos() {
   return (
     <>
       <Navbar companyName={site.general.companyName} slogan={site.general.slogan} theme={site.general} />
+      <OrderSuccessModal open={Boolean(success)} onClose={() => setSuccess("")} />
 
       <section className="section">
         <div className="container">
           <h2>Área de diseño</h2>
           <p className="lead">Espacio visual para mostrar herramientas de diseño, edición de texto, colores, figuras y preparación de piezas antes de producción.</p>
-          {success ? <div className="notice">{success}</div> : null}
           {error ? <div className="notice danger">{error}</div> : null}
 
           <div className="design-workspace">
