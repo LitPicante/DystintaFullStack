@@ -103,13 +103,12 @@ export default function Disenos() {
   const [canvasSize, setCanvasSize] = useState({ width: 30, height: 40 });
   const [imageLayers, setImageLayers] = useState([]);
   const [selectedLayerId, setSelectedLayerId] = useState(null);
+  const [backgroundSelection, setBackgroundSelection] = useState([]);
+  const [removingLayerBackground, setRemovingLayerBackground] = useState(false);
   const [designText, setDesignText] = useState("");
   const [textSize, setTextSize] = useState("Mediano");
   const [selectedColor, setSelectedColor] = useState("#8b4bff");
   const [shapeType, setShapeType] = useState("circle");
-  const [uploadedImageFile, setUploadedImageFile] = useState(null);
-  const [originalImageSrc, setOriginalImageSrc] = useState("");
-  const [previewImageSrc, setPreviewImageSrc] = useState("");
   const [showText, setShowText] = useState(false);
   const [showShape, setShowShape] = useState(false);
   const [showShirt, setShowShirt] = useState(false);
@@ -260,29 +259,37 @@ export default function Disenos() {
     });
   }
 
-  function handleImageUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      setUploadedImageFile(file);
-      setOriginalImageSrc(result);
-      setPreviewImageSrc(result);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  async function handleRemoveBackground() {
-    if (!originalImageSrc) {
-      alert("Primero cargá una imagen PNG.");
+  async function removeBackgroundFromSelectedLayers() {
+    if (!backgroundSelection.length) {
+      alert("Seleccioná una o varias imágenes del lienzo.");
       return;
     }
+
+    setRemovingLayerBackground(true);
     try {
-      const processed = await removeBackgroundFromImage(previewImageSrc || originalImageSrc);
-      setPreviewImageSrc(processed);
+      const selectedIds = new Set(backgroundSelection);
+      const processedById = new Map();
+      const selectedLayers = imageLayers.filter((layer) => selectedIds.has(layer.id));
+
+      for (const layer of selectedLayers) {
+        const processed = await removeBackgroundFromImage(layer.src);
+        const fileBaseName = (layer.name || "imagen-lienzo").replace(/\.[^.]+$/, "");
+        processedById.set(layer.id, {
+          src: processed,
+          file: dataUrlToFile(processed, `${fileBaseName}-sin-fondo.png`),
+          name: `${fileBaseName}-sin-fondo.png`,
+        });
+      }
+
+      setImageLayers((current) => current.map((layer) => (
+        processedById.has(layer.id)
+          ? { ...layer, ...processedById.get(layer.id) }
+          : layer
+      )));
     } catch {
-      alert("No se pudo quitar el fondo automáticamente.");
+      alert("No se pudo quitar el fondo de una o más imágenes.");
+    } finally {
+      setRemovingLayerBackground(false);
     }
   }
 
@@ -343,26 +350,13 @@ export default function Disenos() {
         setImageLayers((current) => {
           const layer = buildImageLayer(file, result, current.length + index);
           setSelectedLayerId(layer.id);
+          setBackgroundSelection((selected) => [...new Set([...selected, layer.id])]);
           return [...current, layer];
         });
       };
       reader.readAsDataURL(file);
     });
     event.target.value = "";
-  }
-
-  function addProcessedImageToCanvas() {
-    if (!previewImageSrc) {
-      alert("Primero cargá o procesá una imagen.");
-      return;
-    }
-    const file = previewImageSrc.startsWith("data:")
-      ? dataUrlToFile(previewImageSrc, uploadedImageFile?.name || "imagen-lienzo.png")
-      : uploadedImageFile;
-    const layer = buildImageLayer(file, previewImageSrc, imageLayers.length);
-    setImageLayers((current) => [...current, layer]);
-    setSelectedLayerId(layer.id);
-    setActiveTool("capas");
   }
 
   function startLayerMove(event, layer) {
@@ -423,6 +417,23 @@ export default function Disenos() {
   function deleteLayer(id) {
     setImageLayers((current) => current.filter((layer) => layer.id !== id));
     setSelectedLayerId((current) => (current === id ? null : current));
+    setBackgroundSelection((current) => current.filter((layerId) => layerId !== id));
+  }
+
+  function toggleBackgroundSelection(layerId) {
+    setBackgroundSelection((current) => (
+      current.includes(layerId)
+        ? current.filter((id) => id !== layerId)
+        : [...current, layerId]
+    ));
+  }
+
+  function selectAllImageLayersForBackground() {
+    setBackgroundSelection(imageLayers.map((layer) => layer.id));
+  }
+
+  function clearBackgroundSelection() {
+    setBackgroundSelection([]);
   }
 
   function addShirtMockup() {
@@ -621,7 +632,6 @@ export default function Disenos() {
             <aside className="tool-sidebar">
               <h3>Herramientas</h3>
               <button className={`tool-btn${activeTool === "capas" ? " active" : ""}`} type="button" onClick={() => setActiveTool("capas")}>Capas y mockup</button>
-              <button className={`tool-btn${activeTool === "fondo" ? " active" : ""}`} type="button" onClick={() => setActiveTool("fondo")}>Quita fondos</button>
               <button className={`tool-btn${activeTool === "remera" ? " active" : ""}`} type="button" onClick={() => setActiveTool("remera")}>Diseñar remera</button>
             </aside>
 
@@ -699,16 +709,6 @@ export default function Disenos() {
                 </div>
 
                 <div className="design-controls">
-                  <section className={`tool-panel${activeTool === "fondo" ? " active" : ""}`} id="tool-fondo">
-                    <h3>Quitar fondos</h3>
-                    <label>Subir imagen<input id="designImageInput" type="file" accept="image/*" onChange={handleImageUpload} /></label>
-                    <div className="form-row"><button className="btn" id="designRemoveBgBtn" type="button" onClick={handleRemoveBackground}>Quitar fondo</button><button className="btn soft" id="designResetImageBtn" type="button" onClick={() => setPreviewImageSrc(originalImageSrc || "")}>Restablecer imagen</button></div>
-                    {previewImageSrc ? <img className="background-preview" alt="Preview sin fondo" src={previewImageSrc} /> : null}
-                    <button className="btn soft" type="button" onClick={addProcessedImageToCanvas}>Agregar al lienzo</button>
-                    <div className="info-card"><strong>Flujo sugerido</strong><p>1. Cargar imagen del cliente<br />2. Limpiar fondo por transparencia/color dominante<br />3. Agregar al lienzo<br />4. Ajustar tamaño y posición</p></div>
-                    <p className="hint">El resultado se puede sumar como una capa editable dentro de la hoja de trabajo.</p>
-                  </section>
-
                   <section className={`tool-panel${activeTool === "capas" ? " active" : ""}`} id="tool-capas">
                     <h3>Capas y mockup</h3>
                     <div className="form-row">
@@ -717,6 +717,36 @@ export default function Disenos() {
                     </div>
                     <label>Agregar imágenes al lienzo<input type="file" accept="image/*" multiple onChange={handleCanvasImageUpload} /></label>
                     <div className="info-card"><strong>Hoja actual</strong><p>{formatCm(canvasSize.width)} x {formatCm(canvasSize.height)} cm. Imágenes cargadas: {imageLayers.length}.</p></div>
+                    <div className="tool-subsection">
+                      <h4>Quita fondos de capas</h4>
+                      {imageLayers.length ? (
+                        <>
+                          <div className="layer-selection-list">
+                            {imageLayers.map((layer) => (
+                              <label className="layer-selection-item" key={layer.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={backgroundSelection.includes(layer.id)}
+                                  onChange={() => toggleBackgroundSelection(layer.id)}
+                                />
+                                {layer.src ? <img src={layer.src} alt={layer.name} /> : null}
+                                <span>{layer.name}</span>
+                                <small>{formatCm(layer.widthCm)} x {formatCm(layer.heightCm)} cm</small>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="panel-action-row">
+                            <button className="btn soft small" type="button" onClick={selectAllImageLayersForBackground}>Seleccionar todas</button>
+                            <button className="btn soft small" type="button" onClick={clearBackgroundSelection}>Limpiar selección</button>
+                            <button className="btn small" type="button" onClick={removeBackgroundFromSelectedLayers} disabled={removingLayerBackground || !backgroundSelection.length}>
+                              {removingLayerBackground ? "Procesando..." : "Quitar fondo"}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="hint">Subí una o varias imágenes al lienzo para poder quitarles el fondo.</p>
+                      )}
+                    </div>
                     <p className="hint">El lienzo empieza vacío. Agregá mockups o elementos desde Diseñar remera cuando corresponda.</p>
                   </section>
 
