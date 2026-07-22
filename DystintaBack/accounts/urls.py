@@ -1,4 +1,5 @@
 from django.urls import path
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import AuthViewSet, UserViewSet
 
@@ -12,6 +13,7 @@ user_designers = UserViewSet.as_view({"get": "designers"})
 
 urlpatterns = [
     path("auth/login/", auth_login, name="auth-login"),
+    path("auth/token/refresh/", TokenRefreshView.as_view(), name="auth-token-refresh"),
     path("auth/logout/", auth_logout, name="auth-logout"),
     path("auth/me/", auth_me, name="auth-me"),
     path("users/", user_list, name="users-list"),

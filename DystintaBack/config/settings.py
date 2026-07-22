@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import timedelta
 import os
 from dotenv import load_dotenv
 
@@ -9,6 +10,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # =========================
 load_dotenv(BASE_DIR / '.env')
 
+
+def env_list(name, default=''):
+    return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
+
+
 # =========================
 # SECURITY
 # =========================
@@ -16,15 +22,9 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv(
-    'ALLOWED_HOSTS',
-    ''
-).split(',')
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
 
-CSRF_TRUSTED_ORIGINS = os.getenv(
-    'CSRF_TRUSTED_ORIGINS',
-    ''
-).split(',')
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 
 # =========================
 # APPS
@@ -174,6 +174,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 # =========================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
+
 # =========================
 # REST FRAMEWORK
 # =========================
@@ -188,12 +189,21 @@ REST_FRAMEWORK = {
 }
 
 # =========================
+# JWT
+# =========================
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(
+        minutes=int(os.getenv('JWT_ACCESS_MINUTES', '30'))
+    ),
+    'REFRESH_TOKEN_LIFETIME': timedelta(
+        hours=int(os.getenv('JWT_REFRESH_HOURS', '8'))
+    ),
+}
+
+# =========================
 # CORS
 # =========================
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    ''
-).split(',')
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS')
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -211,35 +221,37 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
 X_FRAME_OPTIONS = 'DENY'
-# Evolution API privado/local para integración interna WhatsApp
 
+# =========================
+# EVOLUTION API / WHATSAPP
+# =========================
 EVOLUTION_API_URL = os.getenv(
-    "EVOLUTION_API_URL",
-    "http://127.0.0.1:8012"
+    'EVOLUTION_API_URL',
+    'http://127.0.0.1:8012'
 )
 
 EVOLUTION_API_KEY = os.getenv(
-    "EVOLUTION_API_KEY",
-    ""
+    'EVOLUTION_API_KEY',
+    ''
 )
 
 EVOLUTION_INSTANCE_NAME = os.getenv(
-    "EVOLUTION_INSTANCE_NAME",
-    "dystinta-main"
+    'EVOLUTION_INSTANCE_NAME',
+    'dystinta-main'
 )
 
 EVOLUTION_API_TIMEOUT = int(
-    os.getenv("EVOLUTION_API_TIMEOUT", "15")
-)	
+    os.getenv('EVOLUTION_API_TIMEOUT', '15')
+)
 
-FRONTEND_PUBLIC_URL = os.getenv("FRONTEND_PUBLIC_URL", "http://localhost:3000")
+FRONTEND_PUBLIC_URL = os.getenv('FRONTEND_PUBLIC_URL', 'http://localhost:3000')
 
 ADMIN_WHATSAPP_ENABLED = os.getenv(
-    "ADMIN_WHATSAPP_ENABLED",
-    "False"
-).lower() == "true"
+    'ADMIN_WHATSAPP_ENABLED',
+    'False'
+).lower() == 'true'
 
 ADMIN_WHATSAPP_NUMBER = os.getenv(
-    "ADMIN_WHATSAPP_NUMBER",
-    ""
+    'ADMIN_WHATSAPP_NUMBER',
+    ''
 )

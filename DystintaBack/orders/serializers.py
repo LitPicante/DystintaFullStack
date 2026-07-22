@@ -8,7 +8,7 @@ from accounts.models import User
 from core.media_urls import build_media_url
 from .models import Order, OrderAttachment
 from .services.assignment_service import select_designer_for_new_order
-from .services.whatsapp_service import build_order_status_message
+from .services.whatsapp_service import build_order_status_message, normalize_whatsapp_phone
 
 
 STATUS_MESSAGE_MAP = {
@@ -17,19 +17,16 @@ STATUS_MESSAGE_MAP = {
     Order.STATUS_APROBACION_CLIENTE: "listo para aprobaci\u00f3n del cliente.",
     Order.STATUS_PRODUCCION: "en producci\u00f3n.",
     Order.STATUS_ARCHIVO_RECIBIDO: "recibido y registrado en nuestro sistema.",
-    Order.STATUS_DISENO: "en preparación de diseño.",
-    Order.STATUS_EN_COLA: "en cola de producción.",
-    Order.STATUS_IMPRIMIENDO: "en impresión.",
+    Order.STATUS_DISENO: "en preparacion de diseno.",
+    Order.STATUS_EN_COLA: "en cola de produccion.",
+    Order.STATUS_IMPRIMIENDO: "en impresion.",
     Order.STATUS_LISTO_RETIRAR: "listo para retirar.",
     Order.STATUS_ENTREGADO: "entregado.",
     Order.STATUS_EN_PAUSA: "en pausa temporalmente.",
     Order.STATUS_FINALIZADO: "finalizado.",
+    Order.STATUS_CANCELADO: "cancelado.",
 }
 
-
-def normalize_whatsapp_phone(value):
-    digits = "".join(char for char in str(value or "") if char.isdigit())
-    return digits
 
 
 def build_order_status_whatsapp_message(order):
@@ -49,7 +46,7 @@ class FlexibleJSONField(serializers.JSONField):
             try:
                 data = json.loads(data)
             except json.JSONDecodeError:
-                raise serializers.ValidationError("JSON inválido.")
+                raise serializers.ValidationError("JSON invalido.")
         return super().to_internal_value(data)
 
 
@@ -81,6 +78,12 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             "extraData",
             "createdAt",
         ]
+
+    def validate_phone(self, value):
+        normalized = normalize_whatsapp_phone(value)
+        if not normalized:
+            raise serializers.ValidationError("Ingresa un numero de telefono valido.")
+        return normalized
 
     def create(self, validated_data):
         uploaded_file = validated_data.get("file")
@@ -198,7 +201,7 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
     def validate_status(self, value):
         valid_statuses = {choice[0] for choice in Order.STATUS_CHOICES}
         if value not in valid_statuses:
-            raise serializers.ValidationError("Estado inválido.")
+            raise serializers.ValidationError("Estado invalido.")
         return value
 
 
@@ -227,3 +230,4 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
 
     def get_statusMessage(self, obj):
         return Order.message_for_status(obj.status)
+

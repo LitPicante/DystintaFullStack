@@ -20,6 +20,7 @@ class Order(TimestampedModel):
     STATUS_ENTREGADO = "Entregado"
     STATUS_EN_PAUSA = "En pausa"
     STATUS_FINALIZADO = "Finalizado"
+    STATUS_CANCELADO = "Cancelado"
 
     STATUS_CHOICES = (
         (STATUS_NUEVO, "Nuevo"),
@@ -34,6 +35,7 @@ class Order(TimestampedModel):
         (STATUS_ENTREGADO, "Entregado"),
         (STATUS_EN_PAUSA, "En pausa"),
         (STATUS_FINALIZADO, "Finalizado"),
+        (STATUS_CANCELADO, "Cancelado"),
     )
 
     STATUS_PROGRESS = {
@@ -48,6 +50,7 @@ class Order(TimestampedModel):
         STATUS_LISTO_RETIRAR: 85,
         STATUS_ENTREGADO: 100,
         STATUS_FINALIZADO: 100,
+        STATUS_CANCELADO: 100,
     }
 
     STATUS_MESSAGES = {
@@ -63,6 +66,7 @@ class Order(TimestampedModel):
         STATUS_ENTREGADO: "Tu pedido fue entregado.",
         STATUS_EN_PAUSA: "Tu pedido está en pausa temporalmente.",
         STATUS_FINALIZADO: "Pedido finalizado.",
+        STATUS_CANCELADO: "Pedido cancelado.",
     }
 
     SERVICE_DTF_TEXTIL = "DTF Textil"

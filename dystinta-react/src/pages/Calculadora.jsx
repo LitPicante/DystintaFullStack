@@ -18,9 +18,22 @@ const EMPTY_CUSTOMER = { name: "", phone: "", email: "", details: "" };
 const IMAGE_PREVIEW_EXTENSIONS = /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 
 function parseNumber(value, fallback = 0) {
-  const normalized = String(value ?? "").replace(",", ".");
+  const rawValue = String(value ?? "").trim();
+  if (!rawValue) return fallback;
+  const normalized = rawValue.replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeNumberInput(value, { min = 0, max = Infinity, fallback = min, integer = false } = {}) {
+  let nextValue = parseNumber(value, fallback);
+  nextValue = Math.max(min, Math.min(max, nextValue));
+  if (integer) nextValue = Math.round(nextValue);
+  return String(Number(nextValue.toFixed(integer ? 0 : 2)));
+}
+
+function selectInputValue(event) {
+  event.target.select();
 }
 
 function formatMetric(value) {
@@ -33,9 +46,9 @@ function formatMetric(value) {
 function createDesign(index = 0) {
   return {
     id: window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${index}`,
-    width: 8,
-    height: 8,
-    repetitions: 1,
+    width: "8",
+    height: "8",
+    repetitions: "1",
     file: null,
     previewUrl: "",
   };
@@ -207,9 +220,9 @@ export default function Calculadora() {
   const [site, setSite] = useState(null);
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [filmId, setFilmId] = useState(FILM_SIZES[0].id);
-  const [customFilmWidth, setCustomFilmWidth] = useState(DEFAULT_CUSTOM_FILM_WIDTH);
-  const [spacing, setSpacing] = useState(1);
-  const [materialMargin, setMaterialMargin] = useState(0);
+  const [customFilmWidth, setCustomFilmWidth] = useState(String(DEFAULT_CUSTOM_FILM_WIDTH));
+  const [spacing, setSpacing] = useState("1");
+  const [materialMargin, setMaterialMargin] = useState("0");
   const [items, setItems] = useState([createDesign()]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -255,7 +268,7 @@ export default function Calculadora() {
 
   function updateFilmWidth(value) {
     setFilmId(CUSTOM_FILM_ID);
-    setCustomFilmWidth(Math.max(1, parseNumber(value, DEFAULT_CUSTOM_FILM_WIDTH)));
+    setCustomFilmWidth(value);
   }
 
   function validateCalculator() {
@@ -283,15 +296,25 @@ export default function Calculadora() {
           return { ...item, file, previewUrl: file && canPreviewFile(file) ? URL.createObjectURL(file) : "" };
         }
         if (field === "repetitions") {
-          return { ...item, repetitions: Math.max(1, Math.round(parseNumber(value, 1))) };
+          return { ...item, repetitions: value };
         }
-        const nextValue = Math.max(0.1, parseNumber(value, 0.1));
-        if (field === "width") return { ...item, width: Math.min(getUsableFilmWidth(selectedFilm, materialMargin), nextValue) };
-        return { ...item, [field]: nextValue };
+        return { ...item, [field]: value };
       })
     );
   }
 
+  function normalizeItemField(index, field) {
+    setItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        if (field === "repetitions") {
+          return { ...item, repetitions: normalizeNumberInput(item.repetitions, { min: 1, fallback: 1, integer: true }) };
+        }
+        const max = field === "width" ? getUsableFilmWidth(selectedFilm, materialMargin) : Infinity;
+        return { ...item, [field]: normalizeNumberInput(item[field], { min: 0.1, max, fallback: 0.1 }) };
+      })
+    );
+  }
   function addItem() {
     setItems((current) => [...current, createDesign(current.length)]);
   }
@@ -389,9 +412,9 @@ export default function Calculadora() {
       setCustomer(EMPTY_CUSTOMER);
       clearItems();
       setFilmId(FILM_SIZES[0].id);
-      setCustomFilmWidth(DEFAULT_CUSTOM_FILM_WIDTH);
-      setSpacing(1);
-      setMaterialMargin(0);
+      setCustomFilmWidth(String(DEFAULT_CUSTOM_FILM_WIDTH));
+      setSpacing("1");
+      setMaterialMargin("0");
     } catch {
       setError("No se pudo enviar el pedido DTF.");
     } finally {
@@ -446,9 +469,9 @@ export default function Calculadora() {
                 ))}
               </div>
               <div className="calc-grid-top calc-film-controls">
-                <label>Ancho personalizado (cm)<input type="number" min="1" step="0.1" value={customFilmWidth} onFocus={() => setFilmId(CUSTOM_FILM_ID)} onChange={(event) => updateFilmWidth(event.target.value)} /></label>
-                <label>Separación entre imágenes (cm)<input type="number" min={MIN_SPACING_CM} max={Number.isFinite(spacingLimit) ? spacingLimit : undefined} step="0.1" value={spacing} onChange={(event) => setSpacing(Math.max(MIN_SPACING_CM, parseNumber(event.target.value, MIN_SPACING_CM)))} /></label>
-                <label>Margen del material (cm)<input type="number" min="0" step="0.1" value={materialMargin} onChange={(event) => setMaterialMargin(Math.max(0, parseNumber(event.target.value, 0)))} /></label>
+                <label>Ancho personalizado (cm)<input type="number" inputMode="decimal" min="1" step="0.1" value={customFilmWidth} onFocus={(event) => { setFilmId(CUSTOM_FILM_ID); selectInputValue(event); }} onChange={(event) => updateFilmWidth(event.target.value)} onBlur={() => setCustomFilmWidth((value) => normalizeNumberInput(value, { min: 1, fallback: DEFAULT_CUSTOM_FILM_WIDTH }))} /></label>
+                <label>Separaci�n entre im�genes (cm)<input type="number" inputMode="decimal" min={MIN_SPACING_CM} max={Number.isFinite(spacingLimit) ? spacingLimit : undefined} step="0.1" value={spacing} onFocus={selectInputValue} onChange={(event) => setSpacing(event.target.value)} onBlur={() => setSpacing((value) => normalizeNumberInput(value, { min: MIN_SPACING_CM, max: Number.isFinite(spacingLimit) ? spacingLimit : Infinity, fallback: MIN_SPACING_CM }))} /></label>
+                <label>Margen del material (cm)<input type="number" inputMode="decimal" min="0" step="0.1" value={materialMargin} onFocus={selectInputValue} onChange={(event) => setMaterialMargin(event.target.value)} onBlur={() => setMaterialMargin((value) => normalizeNumberInput(value, { min: 0, fallback: 0 }))} /></label>
               </div>
               <p className="hint calc-limit-hint">
                 Ancho disponible: {formatMetric(getUsableFilmWidth(selectedFilm, materialMargin))} cm
@@ -471,9 +494,9 @@ export default function Calculadora() {
                       </div>
                       <label>Archivo del diseño<input type="file" required={!item.file} onChange={(event) => updateItem(index, "file", event.target.files?.[0] || null)} /></label>
                       <div className="calc-item-fields">
-                        <label>Ancho repetición (cm)<input type="number" min="0.1" max={getUsableFilmWidth(selectedFilm, materialMargin)} step="0.1" value={item.width} onChange={(event) => updateItem(index, "width", event.target.value)} /></label>
-                        <label>Alto repetición (cm)<input type="number" min="0.1" step="0.1" value={item.height} onChange={(event) => updateItem(index, "height", event.target.value)} /></label>
-                        <label>Repeticiones<input type="number" min="1" step="1" value={item.repetitions} onChange={(event) => updateItem(index, "repetitions", event.target.value)} /></label>
+                        <label>Ancho repetici�n (cm)<input type="number" inputMode="decimal" min="0.1" max={getUsableFilmWidth(selectedFilm, materialMargin)} step="0.1" value={item.width} onFocus={selectInputValue} onChange={(event) => updateItem(index, "width", event.target.value)} onBlur={() => normalizeItemField(index, "width")} /></label>
+                        <label>Alto repetici�n (cm)<input type="number" inputMode="decimal" min="0.1" step="0.1" value={item.height} onFocus={selectInputValue} onChange={(event) => updateItem(index, "height", event.target.value)} onBlur={() => normalizeItemField(index, "height")} /></label>
+                        <label>Repeticiones<input type="number" inputMode="numeric" min="1" step="1" value={item.repetitions} onFocus={selectInputValue} onChange={(event) => updateItem(index, "repetitions", event.target.value)} onBlur={() => normalizeItemField(index, "repetitions")} /></label>
                       </div>
                       <div className="calc-item-preview">
                         {item.previewUrl ? <img className="calc-image-preview" src={item.previewUrl} alt={`Diseño ${index + 1}`} /> : <div className="calc-upload-placeholder">{item.file ? "Archivo" : "Subir"}</div>}

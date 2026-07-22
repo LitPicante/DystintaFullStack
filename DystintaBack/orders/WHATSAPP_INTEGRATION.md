@@ -252,3 +252,4 @@ Antes de produccion:
 - respaldar sesiones de `dystinta-whatsapp/sessions`,
 - respaldar base de datos de Evolution API,
 - monitorear errores de envio y respuestas invalidas.
+

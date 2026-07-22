@@ -32,18 +32,14 @@ STATUS_MESSAGE_TEMPLATES = {
     Order.STATUS_ARCHIVO_RECIBIDO: "Hola {name}, tu pedido fue recibido correctamente.",
     Order.STATUS_EN_REVISION: "Hola {name}, tu pedido esta siendo revisado.",
     Order.STATUS_DISENO: "Hola {name}, tu pedido ya se encuentra en etapa de diseno.",
-    Order.STATUS_APROBACION_CLIENTE: (
-        "Hola {name}, tu diseno esta listo.\n\n"
-        "Responde:\n"
-        "1 para aprobar\n"
-        "2 para solicitar cambios."
-    ),
+    Order.STATUS_APROBACION_CLIENTE: "Hola {name}, tu diseno esta listo para revision.",
     Order.STATUS_PRODUCCION: "Hola {name}, tu pedido paso a produccion.",
     Order.STATUS_EN_COLA: "Hola {name}, tu pedido esta en cola de produccion.",
     Order.STATUS_IMPRIMIENDO: "Hola {name}, tu pedido se encuentra en impresion.",
     Order.STATUS_LISTO_RETIRAR: "Hola {name}, tu pedido ya esta listo para retirar.",
     Order.STATUS_ENTREGADO: "Hola {name}, tu pedido fue entregado.",
     Order.STATUS_FINALIZADO: "Hola {name}, tu pedido fue finalizado.",
+    Order.STATUS_CANCELADO: "Hola {name}, tu pedido fue cancelado.",
     Order.STATUS_EN_PAUSA: "Hola {name}, tu pedido esta en pausa temporalmente.",
 }
 
@@ -53,7 +49,10 @@ def normalize_whatsapp_phone(value: str | None) -> str:
     Normaliza numeros Paraguay para Evolution API.
 
     Ejemplos:
-    0972908116      -> 595972908116
+    0972908116        -> 595972908116
+    0972 908116       -> 595972908116
+    +595972 908116    -> 595972908116
+    +5950972908116    -> 595972908116
     +595972908116   -> 595972908116
     595972908116    -> 595972908116
     """
@@ -63,8 +62,11 @@ def normalize_whatsapp_phone(value: str | None) -> str:
     if not digits:
         return ""
 
+    if digits.startswith("5950"):
+        digits = "595" + digits[4:]
+
     # Caso 097xxxxxxx
-    if digits.startswith("0"):
+    elif digits.startswith("0"):
         digits = "595" + digits[1:]
 
     # Caso 9xxxxxxxx sin prefijo
@@ -104,6 +106,21 @@ def build_order_tracking_url(order: Order) -> str:
     return f"{frontend_url}/seguimiento/{order.tracking_token}"
 
 
+def build_customer_status_phrase(status: str) -> str:
+    raw_status = str(status or "").strip()
+    if not raw_status:
+        return "en proceso"
+
+    normalized = raw_status.lower()
+    if normalized.startswith("en "):
+        return normalized
+
+    if normalized.startswith(("listo", "entregado", "finalizado", "cancelado")):
+        return normalized
+
+    return f"en {normalized}"
+
+
 def build_order_status_message(order: Order) -> str:
     order_number = (order.order_number or "").strip()
 
@@ -116,16 +133,9 @@ def build_order_status_message(order: Order) -> str:
 
         message = (
             f"Hola {order.name or 'cliente'}, tu pedido {order_number} "
-            f"esta a cargo de {designer_name} y se encuentra en {order.status}."
+            f"esta a cargo de {designer_name} y se encuentra {build_customer_status_phrase(order.status)}."
         )
 
-        if order.status == Order.STATUS_APROBACION_CLIENTE:
-            message = (
-                f"{message}\n\n"
-                "Responde:\n"
-                "1 para aprobar\n"
-                "2 para solicitar cambios."
-            )
     else:
         template = STATUS_MESSAGE_TEMPLATES.get(
             order.status,
@@ -343,7 +353,7 @@ def _admin_order_label(order: Order) -> str:
 
 def notify_admin_new_order(order: Order) -> WhatsAppSendResult:
     message = (
-        "🔔 Nuevo pedido recibido\n\n"
+        "Nuevo pedido recibido\n\n"
         f"Cliente: {order.name or '-'}\n"
         f"Servicio: {order.service or '-'}\n"
         f"Pedido {_admin_order_label(order)}"
@@ -354,7 +364,7 @@ def notify_admin_new_order(order: Order) -> WhatsAppSendResult:
 
 def notify_admin_status_change(order: Order) -> WhatsAppSendResult:
     message = (
-        f"📦 Pedido {_admin_order_label(order)}\n\n"
+        f"Pedido {_admin_order_label(order)}\n\n"
         f"Cliente: {order.name or '-'}\n\n"
         "Nuevo estado:\n"
         f"{order.status}"
@@ -365,7 +375,7 @@ def notify_admin_status_change(order: Order) -> WhatsAppSendResult:
 
 def notify_admin_design_approved(order: Order) -> WhatsAppSendResult:
     message = (
-        "✅ Cliente aprobó diseño\n\n"
+        "Cliente aprobó diseño\n\n"
         f"Pedido {_admin_order_label(order)}\n"
         f"Cliente: {order.name or '-'}"
     )
@@ -378,7 +388,7 @@ def notify_admin_design_rejected(
     customer_response: str | None = None,
 ) -> WhatsAppSendResult:
     message = (
-        "⚠️ Cliente rechazó diseño\n\n"
+        "Cliente rechazó diseño\n\n"
         f"Pedido {_admin_order_label(order)}\n"
         f"Cliente: {order.name or '-'}"
     )
@@ -395,6 +405,16 @@ def notify_admin_design_rejected(
 
 def send_order_status_message(order: Order) -> WhatsAppSendResult:
     """Genera y envia el mensaje automatico correspondiente al estado actual."""
+
+    if order.status == Order.STATUS_APROBACION_CLIENTE:
+        logger.info(
+            "whatsapp.order_status.skipped_approval_options_disabled order_id=%s",
+            order.pk,
+        )
+        return WhatsAppSendResult(
+            sent=False,
+            reason="approval_options_disabled",
+        )
 
     if not order.phone:
         logger.warning(
@@ -644,3 +664,5 @@ def process_evolution_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         "order_id": order.pk,
         "new_status": order.status,
     }
+
+

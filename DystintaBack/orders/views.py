@@ -12,6 +12,8 @@ from rest_framework.response import Response
 
 from core.permissions import IsAdmin, IsAdminOrDesigner
 from .models import Order, OrderAttachment
+CLOSED_ORDER_STATUSES = {Order.STATUS_ENTREGADO, Order.STATUS_FINALIZADO, Order.STATUS_CANCELADO}
+
 from .serializers import (
     OrderCreateSerializer,
     OrderDetailSerializer,
@@ -152,6 +154,11 @@ class OrderViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         reason = str(request.data.get("reason", "") or "").strip() if isinstance(request.data, dict) else ""
+        if instance.status not in CLOSED_ORDER_STATUSES:
+            return Response(
+                {"detail": "El pedido aun no esta terminado o cancelado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         instance.archived_at = timezone.now()
         instance.archived_by = request.user if request.user.is_authenticated else None
         instance.archived_reason = reason[:255]
@@ -166,7 +173,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             "total": queryset.count(),
             "new": queryset.filter(status=Order.STATUS_ARCHIVO_RECIBIDO).count(),
             "design": queryset.filter(status=Order.STATUS_DISENO).count(),
-            "done": queryset.filter(status__in=[Order.STATUS_ENTREGADO, Order.STATUS_FINALIZADO]).count(),
+            "done": queryset.filter(status__in=CLOSED_ORDER_STATUSES).count(),
         }
         serializer = OrderStatsSerializer(data)
         return Response(serializer.data)

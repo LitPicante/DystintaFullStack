@@ -6,7 +6,7 @@ from orders.models import Order
 from orders.serializers import OrderCreateSerializer
 from orders.views import OrderViewSet
 from orders.services.assignment_service import select_designer_for_new_order
-from orders.services.whatsapp_service import build_order_status_message
+from orders.services.whatsapp_service import build_order_status_message, normalize_whatsapp_phone, send_order_status_message
 
 
 class OrderAssignmentServiceTests(TestCase):
@@ -119,4 +119,45 @@ class OrderAssignmentServiceTests(TestCase):
         self.assertIn("Hola Cliente Uno", message)
         self.assertIn("tu pedido 15", message)
         self.assertIn("esta a cargo de Ana Designer", message)
-        self.assertIn("se encuentra en En dise", message)
+        self.assertIn("se encuentra en dise", message)
+        self.assertNotIn("se encuentra en En", message)
+
+    def test_approval_status_does_not_send_customer_options(self):
+        order = Order.objects.create(
+            service=Order.SERVICE_DTF_TEXTIL,
+            name="Cliente Uno",
+            phone="0982317317",
+            status=Order.STATUS_APROBACION_CLIENTE,
+        )
+
+        message = build_order_status_message(order)
+        result = send_order_status_message(order)
+
+        self.assertNotIn("1 para aprobar", message)
+        self.assertNotIn("2 para solicitar cambios", message)
+        self.assertFalse(result.sent)
+        self.assertEqual(result.reason, "approval_options_disabled")
+
+    def test_normalizes_paraguay_phone_formats(self):
+        samples = [
+            "0972908116",
+            "0972 908116",
+            "+595972908116",
+            "+595972 908116",
+            "+5950972908116",
+        ]
+
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertEqual(normalize_whatsapp_phone(sample), "595972908116")
+
+    def test_order_create_normalizes_phone_before_saving(self):
+        self.create_designer("designer-1")
+        serializer = OrderCreateSerializer(data={
+            **self.create_order_payload(1),
+            "phone": "0972 908116",
+        })
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
+
+        self.assertEqual(order.phone, "595972908116")

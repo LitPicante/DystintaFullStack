@@ -5,6 +5,38 @@ const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
+
+const refreshClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+let refreshTokenPromise = null;
+
+function clearAuthTokens() {
+  localStorage.removeItem("access");
+  localStorage.removeItem("refresh");
+}
+
+async function refreshAccessToken() {
+  const refresh = localStorage.getItem("refresh");
+  if (!refresh) return "";
+
+  if (!refreshTokenPromise) {
+    refreshTokenPromise = refreshClient
+      .post("/auth/token/refresh/", { refresh })
+      .then((response) => {
+        const access = response.data?.access || "";
+        if (access) localStorage.setItem("access", access);
+        return access;
+      })
+      .finally(() => {
+        refreshTokenPromise = null;
+      });
+  }
+
+  return refreshTokenPromise;
+}
+
 const PUBLIC_SITE_CACHE_KEY = "dystinta.publicSite.v1";
 const HOME_CAROUSEL_CACHE_KEY = "dystinta.homeCarousel.v1";
 
@@ -110,10 +142,29 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("access");
-      localStorage.removeItem("refresh");
+  async (error) => {
+    const originalRequest = error.config || {};
+    const status = error.response?.status;
+    const isRefreshRequest = String(originalRequest.url || "").includes("/auth/token/refresh/");
+
+    if (status === 401 && !originalRequest._retry && !originalRequest.skipAuth && !isRefreshRequest) {
+      originalRequest._retry = true;
+      try {
+        const access = await refreshAccessToken();
+        if (access) {
+          originalRequest.headers = {
+            ...(originalRequest.headers || {}),
+            Authorization: `Bearer ${access}`,
+          };
+          return api(originalRequest);
+        }
+      } catch {
+        // The refresh token is invalid or expired; fall through to clear the session.
+      }
+    }
+
+    if (status === 401) {
+      clearAuthTokens();
     }
 
     return Promise.reject(error);

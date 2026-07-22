@@ -4,9 +4,9 @@ import logo from "../assets/logo-dystinta.jpg";
 import WhatsAppAdminPanel from "../components/WhatsAppAdminPanel";
 import { adminToolsService, authService, mediaService, orderService, siteService, userService } from "../services/backend";
 
-const STATUS_OPTIONS = ["Nuevo", "En revisión", "Archivo recibido", "En diseño", "Aprobación cliente", "Producción", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado"];
+const STATUS_OPTIONS = ["Nuevo", "En revisión", "Archivo recibido", "En diseño", "Aprobación cliente", "Producción", "En cola", "Imprimiendo", "Listo para retirar", "Entregado", "En pausa", "Finalizado", "Cancelado"];
 const SERVICE_OPTIONS = ["DTF Textil", "DTF UV", "Serigrafía", "Catálogo"];
-const COMPLETED_STATUSES = ["Entregado", "Finalizado"];
+const COMPLETED_STATUSES = ["Entregado", "Finalizado", "Cancelado"];
 const ORDER_UPDATE_TIMEOUT_MS = 20000;
 const EMPTY_USER_FORM = { username: "", password: "", role: "designer", name: "", is_active: true };
 const EMPTY_BACKOFFICE_ORDER_FORM = { name: "", phone: "", email: "", details: "", file: null };
@@ -421,11 +421,19 @@ export default function Panel({ initialTab = "dashboard" }) {
     setLoading(true);
     setError("");
     try {
-      const [ordersData, statsData] = await Promise.all([orderService.list(queryParams), orderService.stats(queryParams)]);
+      const ordersData = await orderService.list(queryParams);
       setOrders(Array.isArray(ordersData) ? ordersData : []);
-      setStats(statsData || { total: 0, new: 0, design: 0, done: 0 });
     } catch {
       setError("No se pudieron cargar los pedidos.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const statsData = await orderService.stats(queryParams);
+      setStats(statsData || { total: 0, new: 0, design: 0, done: 0 });
+    } catch {
+      setStats((current) => current || { total: 0, new: 0, design: 0, done: 0 });
     } finally {
       setLoading(false);
     }
@@ -734,7 +742,7 @@ export default function Panel({ initialTab = "dashboard" }) {
   async function archiveOrder(order) {
     const reason = window.prompt(
       `Motivo para enviar el pedido #${order.id} al historial`,
-      order.status === "Finalizado" || order.status === "Entregado" ? "Pedido terminado" : ""
+      COMPLETED_STATUSES.includes(order.status) ? "Pedido terminado" : ""
     );
 
     if (reason === null) return;
@@ -751,8 +759,8 @@ export default function Panel({ initialTab = "dashboard" }) {
       await loadDashboardOrders();
       if (activeTab === "history") await loadHistoryOrders();
       setSuccess("Pedido movido al historial.");
-    } catch {
-      setError("No se pudo mover el pedido al historial.");
+    } catch (error) {
+      setError(error?.response?.data?.detail || "No se pudo mover el pedido al historial.");
       setSuccess("");
     } finally {
       setSavingOrderId(null);
